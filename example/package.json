@@ -7,7 +7,11 @@
     "ios": "react-native run-ios",
     "lint": "eslint .",
     "start": "react-native start",
-    "test": "jest"
+    "test": "jest",
+    "e2e:build:ios": "detox build --configuration ios.sim.debug",
+    "e2e:test:ios": "detox test --configuration ios.sim.debug",
+    "e2e:build:android": "detox build --configuration android.emu.debug",
+    "e2e:test:android": "detox test --configuration android.emu.debug"
   },
   "dependencies": {
     "@react-native/new-app-screen": "0.81.1",
@@ -30,11 +34,61 @@
     "@types/jest": "^29.5.13",
     "@types/react": "^19.1.0",
     "@types/react-test-renderer": "^19.1.0",
+    "detox": "^20.41.1",
     "eslint": "^8.19.0",
     "jest": "^29.6.3",
     "prettier": "2.8.8",
     "react-test-renderer": "19.1.0",
     "typescript": "^5.8.3"
+  },
+  "detox": {
+    "testRunner": {
+      "args": {
+        "config": "tests/e2e/jest.config.js",
+        "maxWorkers": 1
+      },
+      "jest": {
+        "setupFilesAfterEnv": [
+          "<rootDir>/tests/e2e/init.js"
+        ]
+      }
+    },
+    "apps": {
+      "ios.debug": {
+        "type": "ios.app",
+        "binaryPath": "ios/build/Build/Products/Debug-iphonesimulator/SSHSFTPExample.app",
+        "build": "xcodebuild -workspace ios/SSHSFTPExample.xcworkspace -scheme SSHSFTPExample -configuration Debug -sdk iphonesimulator -derivedDataPath ios/build"
+      },
+      "android.debug": {
+        "type": "android.apk",
+        "binaryPath": "android/app/build/outputs/apk/debug/app-debug.apk",
+        "build": "cd android && ./gradlew assembleDebug assembleAndroidTest -DtestBuildType=debug"
+      }
+    },
+    "devices": {
+      "simulator": {
+        "type": "ios.simulator",
+        "device": {
+          "type": "iPhone 16"
+        }
+      },
+      "emulator": {
+        "type": "android.emulator",
+        "device": {
+          "avdName": "Pixel_3a_API_30_x86"
+        }
+      }
+    },
+    "configurations": {
+      "ios.sim.debug": {
+        "device": "simulator",
+        "app": "ios.debug"
+      },
+      "android.emu.debug": {
+        "device": "emulator",
+        "app": "android.debug"
+      }
+    }
   },
   "engines": {
     "node": ">=20"

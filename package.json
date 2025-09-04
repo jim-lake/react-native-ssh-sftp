@@ -5,7 +5,6 @@
   "main": "lib/sshclient.js",
   "scripts": {
     "_postinstall": "npm run compile",
-    "prepare": "husky",
     "build": "npm run compile && npm pack",
     "precompile": "npm run lint:build",
     "compile": "npx tsc",
@@ -65,8 +64,7 @@
     "@typescript-eslint/eslint-plugin": "^7.13.1",
     "@typescript-eslint/parser": "^7.13.1",
     "cross-env": "^7.0.3",
-    "husky": "^9.0.11",
-    "typescript": "^5.4.5",
-    "eslint": "^8.57.0"
+    "eslint": "^8.57.0",
+    "typescript": "^5.4.5"
   }
 }

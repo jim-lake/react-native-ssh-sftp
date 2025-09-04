@@ -19,10 +19,10 @@ export default function App() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>SSH SFTP Example</Text>
-      <Text style={styles.status}>Status: {status}</Text>
-      <Button title="Test SSH Connection" onPress={testConnection} />
+    <View style={styles.container} testID="main-container">
+      <Text style={styles.title} testID="title">SSH SFTP Example</Text>
+      <Text style={styles.status} testID="status">Status: {status}</Text>
+      <Button title="Test SSH Connection" onPress={testConnection} testID="test-button" />
     </View>
   );
 }

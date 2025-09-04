@@ -230,6 +230,37 @@ client.disconnectSFTP();
 
 You can find a very simple example app for the usage of this library [here](https://github.com/dylankenneally/react-native-ssh-sftp-example).
 
+## Testing
+
+The example app includes end-to-end (e2e) tests using Detox.
+
+### Prerequisites
+
+**iOS:**
+- Xcode and iOS Simulator
+- `applesimutils` (install via `brew tap wix/brew && brew install applesimutils`)
+
+**Android:**
+- Android Studio and Android SDK
+- Android emulator with AVD named `Pixel_3a_API_30_x86`
+
+### Running Tests
+
+```bash
+cd example
+
+# Install dependencies
+npm install
+
+# iOS
+npm run e2e:build:ios
+npm run e2e:test:ios
+
+# Android
+npm run e2e:build:android
+npm run e2e:test:android
+```
+
 ## Credits
 
 This package wraps the following libraries, which provide the actual SSH/SFTP functionality:

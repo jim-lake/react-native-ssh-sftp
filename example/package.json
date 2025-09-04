@@ -9,8 +9,8 @@
     "start": "react-native start",
     "test": "jest",
     "bundle": "npx react-native bundle --platform ios --dev false --entry-file index.js --bundle-output ios/main.jsbundle",
-    "e2e:build:ios": "npm run bundle && detox build --configuration ios.sim.debug",
-    "e2e:test:ios": "detox test --configuration ios.sim.debug",
+    "e2e:build:ios": "npm run bundle && detox build --configuration ios.sim.release",
+    "e2e:test:ios": "detox test --configuration ios.sim.release",
     "e2e:build:android": "detox build --configuration android.emu.debug",
     "e2e:test:android": "detox test --configuration android.emu.debug"
   },
@@ -55,10 +55,10 @@
       }
     },
     "apps": {
-      "ios.debug": {
+      "ios.release": {
         "type": "ios.app",
-        "binaryPath": "ios/build/Build/Products/Debug-iphonesimulator/SSHSFTPExample.app",
-        "build": "xcodebuild -workspace ios/SSHSFTPExample.xcworkspace -scheme SSHSFTPExample -configuration Debug -sdk iphonesimulator -derivedDataPath ios/build"
+        "binaryPath": "ios/build/Build/Products/Release-iphonesimulator/SSHSFTPExample.app",
+        "build": "xcodebuild -workspace ios/SSHSFTPExample.xcworkspace -scheme SSHSFTPExample -configuration Release -sdk iphonesimulator -derivedDataPath ios/build -quiet"
       },
       "android.debug": {
         "type": "android.apk",
@@ -81,9 +81,9 @@
       }
     },
     "configurations": {
-      "ios.sim.debug": {
+      "ios.sim.release": {
         "device": "simulator",
-        "app": "ios.debug"
+        "app": "ios.release"
       },
       "android.emu.debug": {
         "device": "emulator",

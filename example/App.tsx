@@ -1,5 +1,5 @@
 import React, {useState} from 'react';
-import {View, Text, Button, StyleSheet, Alert, ScrollView} from 'react-native';
+import {View, Text, StyleSheet, Alert, TouchableOpacity} from 'react-native';
 import SSHClient from './sshclient.js';
 
 export default function App() {
@@ -105,6 +105,19 @@ gQT51sWj0C7S5tkmVWqRbuKLPLNTa4IW+Ls30yReijz95DWMHf0X
     }
   };
 
+  const testSFTP = async () => {
+    setStatus('Testing SFTP...');
+    try {
+      const client = await SSHClient.connectWithPassword('127.0.0.1', 2222, 'user', 'password');
+      await client.connectSFTP();
+      const files = await client.sftpLs('.');
+      setStatus(`SFTP Connected! Found ${files.length} files`);
+      client.disconnect();
+    } catch (error) {
+      setStatus(`SFTP Failed: ${error.message}`);
+    }
+  };
+
   const testEncryptedRSAKey = async () => {
     setStatus('Testing Encrypted RSA Key...');
     try {
@@ -147,57 +160,63 @@ gabzR7vGspCHltGME7l7mIe6l13ixn8dd8ils2j97NjMbafncDkQM/uwsZaXU/JU
   };
 
   return (
-    <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.scrollContent}>
-      <View style={styles.container} testID="main-container">
-        <Text style={styles.title} testID="title">SSH SFTP Example</Text>
-        <Text style={styles.status} testID="status">Status: {status}</Text>
-        <View style={styles.buttonContainer}>
-          <View style={styles.buttonWrapper}>
-            <Button title="Test SSH Connection" onPress={testConnection} testID="test-button" />
-          </View>
-          <View style={styles.buttonWrapper}>
-            <Button title="Test Docker SSH" onPress={testDockerConnection} testID="docker-test-button" />
-          </View>
-          <View style={styles.buttonWrapper}>
-            <Button title="Test RSA Key" onPress={testRSAKey} testID="rsa-key-button" />
-          </View>
-          <View style={styles.buttonWrapper}>
-            <Button title="Test OpenSSH Key" onPress={testOpenSSHKey} testID="openssh-key-button" />
-          </View>
-          <View style={styles.buttonWrapper}>
-            <Button title="Test Encrypted RSA Key" onPress={testEncryptedRSAKey} testID="encrypted-rsa-key-button" />
-          </View>
-        </View>
+    <View style={styles.container} testID="main-container">
+      <Text style={styles.title} testID="title">SSH SFTP</Text>
+      <Text style={styles.status} testID="status">Status: {status}</Text>
+      <View style={styles.buttonRow}>
+        <TouchableOpacity style={styles.button} onPress={testConnection} testID="test-button">
+          <Text style={styles.buttonText}>S</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.button} onPress={testDockerConnection} testID="docker-test-button">
+          <Text style={styles.buttonText}>D</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.button} onPress={testRSAKey} testID="rsa-key-button">
+          <Text style={styles.buttonText}>R</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.button} onPress={testOpenSSHKey} testID="openssh-key-button">
+          <Text style={styles.buttonText}>O</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.button} onPress={testEncryptedRSAKey} testID="encrypted-rsa-key-button">
+          <Text style={styles.buttonText}>E</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.button} onPress={testSFTP} testID="sftp-test-button">
+          <Text style={styles.buttonText}>F</Text>
+        </TouchableOpacity>
       </View>
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  scrollContainer: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    padding: 20,
-  },
   container: {
-    alignItems: 'center',
+    flex: 1,
+    padding: 10,
   },
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 20,
+    fontSize: 14,
+    marginBottom: 5,
   },
   status: {
-    fontSize: 16,
-    marginBottom: 20,
-  },
-  buttonContainer: {
-    width: '100%',
-  },
-  buttonWrapper: {
+    fontSize: 12,
     marginBottom: 10,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  button: {
+    backgroundColor: '#007AFF',
+    padding: 4,
+    borderRadius: 2,
+    width: 20,
+    height: 20,
+    marginHorizontal: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 8,
+    fontWeight: 'bold',
   },
 });

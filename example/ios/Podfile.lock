@@ -8,7 +8,7 @@ PODS:
   - hermes-engine (0.81.1):
     - hermes-engine/Pre-built (= 0.81.1)
   - hermes-engine/Pre-built (0.81.1)
-  - NMSSH (2.3.1)
+  - NMSSH (2.3.2)
   - RCT-Folly (2024.11.18.00):
     - boost
     - DoubleConversion
@@ -2582,7 +2582,7 @@ EXTERNAL SOURCES:
 
 CHECKOUT OPTIONS:
   NMSSH:
-    :commit: fca0a719362949ddfd0e959de0196dc1eefde874
+    :commit: 9d1b81398ace407b5f3cbac0a7bcf74002a0be0c
     :git: https://github.com/jim-lake/NMSSH.git
 
 SPEC CHECKSUMS:
@@ -2593,7 +2593,7 @@ SPEC CHECKSUMS:
   fmt: a40bb5bd0294ea969aaaba240a927bd33d878cdd
   glog: 5683914934d5b6e4240e497e0f4a3b42d1854183
   hermes-engine: 4f8246b1f6d79f625e0d99472d1f3a71da4d28ca
-  NMSSH: e3a6af0c584cb74825d01fd61e1bccfc2931ffa9
+  NMSSH: 9f140e0764426e20f1f2b429d16720802eedb78e
   RCT-Folly: 846fda9475e61ec7bcbf8a3fe81edfcaeb090669
   RCTDeprecation: c4b9e2fd0ab200e3af72b013ed6113187c607077
   RCTRequired: e97dd5dafc1db8094e63bc5031e0371f092ae92a

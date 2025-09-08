@@ -8,8 +8,10 @@ export default function App() {
   const testConnection = async () => {
     setStatus('Testing...');
     try {
-      await SSHClient.connectWithPassword('127.0.0.1', 22, 'test', 'test');
+      const client = await SSHClient.connect('127.0.0.1', 22, 'test');
+      await client.authenticateWithPassword('test');
       setStatus('Connected');
+      client.disconnect();
     } catch (error) {
       setStatus('Native call successful (connection failed as expected)');
       Alert.alert('Success', 'Native SSH module is working correctly!');
@@ -19,7 +21,8 @@ export default function App() {
   const testDockerConnection = async () => {
     setStatus('Testing Docker SSH...');
     try {
-      const client = await SSHClient.connectWithPassword('127.0.0.1', 2222, 'user', 'password');
+      const client = await SSHClient.connect('127.0.0.1', 2222, 'user');
+      await client.authenticateWithPassword('password');
       setStatus('Docker SSH Connected!');
       client.disconnect();
       Alert.alert('Success', 'Connected to Docker SSH server!');
@@ -59,7 +62,8 @@ h+BchQKBgFkO4+5fL/7sB2EG9VBw1AaQwM2esO07Zv0emOYojXqVKShAL2xD7dw1
 HYI/V6f7UiJ+EL+LJUjkPYx0GLU1hO24xZlK3TjVzYLuEGxtRVLvT9hOx26s28cE
 gQT51sWj0C7S5tkmVWqRbuKLPLNTa4IW+Ls30yReijz95DWMHf0X
 -----END RSA PRIVATE KEY-----`;
-      const client = await SSHClient.connectWithKey('127.0.0.1', 2222, 'user', privateKey);
+      const client = await SSHClient.connect('127.0.0.1', 2222, 'user');
+      await client.authenticateWithKey(privateKey);
       setStatus('RSA Key Connected!');
       client.disconnect();
     } catch (error) {
@@ -97,7 +101,8 @@ h+BchQKBgFkO4+5fL/7sB2EG9VBw1AaQwM2esO07Zv0emOYojXqVKShAL2xD7dw1
 HYI/V6f7UiJ+EL+LJUjkPYx0GLU1hO24xZlK3TjVzYLuEGxtRVLvT9hOx26s28cE
 gQT51sWj0C7S5tkmVWqRbuKLPLNTa4IW+Ls30yReijz95DWMHf0X
 -----END RSA PRIVATE KEY-----`;
-      const client = await SSHClient.connectWithKey('127.0.0.1', 2222, 'user', privateKey);
+      const client = await SSHClient.connect('127.0.0.1', 2222, 'user');
+      await client.authenticateWithKey(privateKey);
       setStatus('OpenSSH Key Connected!');
       client.disconnect();
     } catch (error) {
@@ -108,7 +113,8 @@ gQT51sWj0C7S5tkmVWqRbuKLPLNTa4IW+Ls30yReijz95DWMHf0X
   const testSFTP = async () => {
     setStatus('Testing SFTP...');
     try {
-      const client = await SSHClient.connectWithPassword('127.0.0.1', 2222, 'user', 'password');
+      const client = await SSHClient.connect('127.0.0.1', 2222, 'user');
+      await client.authenticateWithPassword('password');
       await client.connectSFTP();
       const files = await client.sftpLs('.');
       setStatus(`SFTP Connected! Found ${files.length} files`);
@@ -151,7 +157,8 @@ WhwVl1ZKPijqaeYm+UlGIYVjdkKmJb7XAFzeP2jgfUZ8HYA+VlUsPEMcqR5AL6mu
 D6/OHAfwShJpHro4mwSo/Gptr31nANMR5y++l9u2SS4PIwVGvlPQbtw+V2mga1Cz
 gabzR7vGspCHltGME7l7mIe6l13ixn8dd8ils2j97NjMbafncDkQM/uwsZaXU/JU
 -----END RSA PRIVATE KEY-----`;
-      const client = await SSHClient.connectWithKey('127.0.0.1', 2222, 'user', privateKey, 'password');
+      const client = await SSHClient.connect('127.0.0.1', 2222, 'user');
+      await client.authenticateWithKey(privateKey, 'password');
       setStatus('Encrypted RSA Key Connected!');
       client.disconnect();
     } catch (error) {
@@ -169,7 +176,8 @@ gabzR7vGspCHltGME7l7mIe6l13ixn8dd8ils2j97NjMbafncDkQM/uwsZaXU/JU
         return 'mock-signature-base64-encoded';
       };
       
-      const client = await SSHClient.connectWithSignCallback('127.0.0.1', 2222, 'user', publicKey, signCallback);
+      const client = await SSHClient.connect('127.0.0.1', 2222, 'user');
+      await client.authenticateWithSignCallback(publicKey, signCallback);
       setStatus('Sign Callback Connected!');
       client.disconnect();
     } catch (error) {

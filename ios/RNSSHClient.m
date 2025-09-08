@@ -154,7 +154,137 @@ RCT_EXPORT_METHOD(provideSignature:(NSString *)requestId
 RCT_EXPORT_METHOD(connectToHost:(NSString *)host
                   port:(NSInteger)port
                   withUsername:(NSString *)username
-                  passwordOrKey:(id) passwordOrKey // password or {privateKey: value, [publicKey: value, passphrase: value]}
+                  withKey:(nonnull NSString*)key
+                  withCallback:(RCTResponseSenderBlock)callback){
+    NMSSHSession* session = [NMSSHSession connectToHost:host
+                                                   port:port
+                                           withUsername:username];
+    if (session && session.isConnected) {
+        SSHClient* client = [[SSHClient alloc] init];
+        client._session = session;
+        client._key = key;
+        [[self clientPool] setObject:client forKey:key];
+        NSLog(@"Session connected (not authenticated)");
+        callback(@[]);
+    } else {
+        if (session) {
+            NSLog(@"Connection to host %@ failed", host);
+            callback(@[[NSString stringWithFormat:@"Connection to host %@ failed, with session", host]]);
+        } else {
+            NSLog(@"Connection to host %@ failed", host);
+            callback(@[[NSString stringWithFormat:@"Connection to host %@ failed, without session", host]]);
+        }
+    }
+}
+
+RCT_EXPORT_METHOD(authenticateWithPassword:(NSString *)password
+                  withKey:(nonnull NSString*)key
+                  withCallback:(RCTResponseSenderBlock)callback){
+    SSHClient* client = [self clientForKey:key];
+    if (client && client._session && client._session.isConnected) {
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+            [client._session authenticateByPassword:password];
+            if (client._session.isAuthorized) {
+                NSLog(@"Password authentication successful");
+                callback(@[]);
+            } else {
+                NSLog(@"Password authentication failed");
+                callback(@[@"Password authentication failed"]);
+            }
+        });
+    } else {
+        callback(@[@"Client not connected"]);
+    }
+}
+
+RCT_EXPORT_METHOD(authenticateWithKey:(NSDictionary *)keyPair
+                  withKey:(nonnull NSString*)key
+                  withCallback:(RCTResponseSenderBlock)callback){
+    SSHClient* client = [self clientForKey:key];
+    if (client && client._session && client._session.isConnected) {
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+            [client._session authenticateByInMemoryPublicKey:[keyPair objectForKey:@"publicKey"] 
+                                                  privateKey:[keyPair objectForKey:@"privateKey"] 
+                                                 andPassword:[keyPair objectForKey:@"passphrase"]];
+            if (client._session.isAuthorized) {
+                NSLog(@"Key authentication successful");
+                callback(@[]);
+            } else {
+                NSLog(@"Key authentication failed");
+                callback(@[@"Key authentication failed"]);
+            }
+        });
+    } else {
+        callback(@[@"Client not connected"]);
+    }
+}
+
+RCT_EXPORT_METHOD(authenticateWithSignCallback:(NSString *)publicKey
+                  withKey:(nonnull NSString*)key
+                  withCallback:(RCTResponseSenderBlock)callback){
+    SSHClient* client = [self clientForKey:key];
+    if (client && client._session && client._session.isConnected) {
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+            NSData *publicKeyData = [publicKey dataUsingEncoding:NSUTF8StringEncoding];
+            
+            BOOL authenticated = [client._session authenticateByInMemoryPublicKey:publicKeyData
+                                                            signCallback:^int(NSData * _Nonnull data, NSData * _Nullable * _Nonnull signature) {
+                // Convert NSData to base64 string for JS callback
+                NSString *dataString = [data base64EncodedStringWithOptions:0];
+                NSString *requestId = [[NSUUID UUID] UUIDString];
+                
+                // Create a semaphore to wait for JS callback
+                dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
+                
+                // Store the semaphore and result pointer for this request
+                [[self pendingSignRequests] setObject:@{
+                    @"semaphore": semaphore,
+                    @"signature": [NSNull null]
+                } forKey:requestId];
+                
+                // Call JS callback on main thread
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    [self sendEventWithName:@"SignCallback" body:@{
+                        @"key": key,
+                        @"requestId": requestId,
+                        @"data": dataString
+                    }];
+                });
+                
+                // Wait for JS to call back with signature (timeout after 30 seconds)
+                dispatch_time_t timeout = dispatch_time(DISPATCH_TIME_NOW, 30 * NSEC_PER_SEC);
+                if (dispatch_semaphore_wait(semaphore, timeout) == 0) {
+                    NSDictionary *request = [[self pendingSignRequests] objectForKey:requestId];
+                    if (request && ![request[@"signature"] isEqual:[NSNull null]]) {
+                        NSData *resultSignature = request[@"signature"];
+                        *signature = resultSignature;
+                        [[self pendingSignRequests] removeObjectForKey:requestId];
+                        return 0; // Success
+                    }
+                }
+                
+                [[self pendingSignRequests] removeObjectForKey:requestId];
+                return -1; // Failure or timeout
+            }];
+
+            if (authenticated && client._session.isAuthorized) {
+                NSLog(@"Sign callback authentication successful");
+                callback(@[]);
+            } else {
+                NSLog(@"Sign callback authentication failed");
+                callback(@[@"Sign callback authentication failed"]);
+            }
+        });
+    } else {
+        callback(@[@"Client not connected"]);
+    }
+}
+
+// Legacy method - now calls the separated methods
+RCT_EXPORT_METHOD(connectToHostLegacy:(NSString *)host
+                  port:(NSInteger)port
+                  withUsername:(NSString *)username
+                  passwordOrKey:(id) passwordOrKey
                   withKey:(nonnull NSString*)key
                   withCallback:(RCTResponseSenderBlock)callback){
     NMSSHSession* session = [NMSSHSession connectToHost:host
@@ -261,10 +391,14 @@ RCT_EXPORT_METHOD(writeToShell:(NSString *)command
     [self sendEventWithName:@"Shell" body:@{@"name": @"Shell", @"key": key, @"value": event}];
 }
 
-RCT_EXPORT_METHOD(closeShell:(nonnull NSString*)key) {
+RCT_EXPORT_METHOD(closeShell:(nonnull NSString*)key
+                  withCallback:(RCTResponseSenderBlock)callback) {
     SSHClient* client = [self clientForKey:key];
     if (client && client._session && client._session.channel) {
         [client._session.channel closeShell];
+        callback(@[]);
+    } else {
+        callback(@[@"No active shell to close"]);
     }
 }
 
@@ -497,19 +631,26 @@ RCT_EXPORT_METHOD(sftpCancelUpload:(nonnull NSString*)key) {
     }
 }
 
-RCT_EXPORT_METHOD(disconnectSFTP:(nonnull NSString*)key) {
+RCT_EXPORT_METHOD(disconnectSFTP:(nonnull NSString*)key
+                  withCallback:(RCTResponseSenderBlock)callback) {
     SSHClient* client = [self clientForKey:key];
     if (client && client._sftpSession) {
         [client._sftpSession disconnect];
+        callback(@[]);
+    } else {
+        callback(@[@"No active SFTP session to disconnect"]);
     }
 }
 
-RCT_EXPORT_METHOD(disconnect:(nonnull NSString*)key) {
-    [self closeShell:key];
-    [self disconnectSFTP:key];
+RCT_EXPORT_METHOD(disconnect:(nonnull NSString*)key
+                  withCallback:(RCTResponseSenderBlock)callback) {
     SSHClient* client = [self clientForKey:key];
     if (client && client._session) {
         [client._session disconnect];
+        [[self clientPool] removeObjectForKey:key];
+        callback(@[]);
+    } else {
+        callback(@[@"No active session to disconnect"]);
     }
 }
 

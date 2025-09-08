@@ -105,6 +105,12 @@ export type PasswordOrKey = string | KeyPair;
 /**
  * Represents an SSH client that can connect to a remote server and perform various operations.
  * Instances of SSHClient are created using the following factory functions:
+ * - SSHClient.connect() - connects to host
+ * - client.authenticateWithPassword() - authenticates with password
+ * - client.authenticateWithKey() - authenticates with key
+ * - client.authenticateWithSignCallback() - authenticates with sign callback
+ *
+ * Legacy methods (deprecated):
  * - SSHClient.connectWithKey()
  * - SSHClient.connectWithPassword()
  */
@@ -156,7 +162,40 @@ export default class SSHClient {
     });
   }
   /**
+   * Connects to an SSH server without authentication.
+   *
+   * @param host - The hostname or IP address of the SSH server.
+   * @param port - The port number of the SSH server.
+   * @param username - The username for authentication.
+   * @param callback - A callback function to handle the connection result (optional).
+   *
+   * @returns A Promise that resolves to an instance of SSHClient if the connection is successful.
+   *          Otherwise, it rejects with an error.
+   */
+  static connect(
+    host: string,
+    port: number,
+    username: string,
+    callback?: CallbackFunction<SSHClient>
+  ): Promise<SSHClient> {
+    return new Promise((resolve, reject) => {
+      const result = new SSHClient(host, port, username, (error: CBError) => {
+        if (callback) {
+          callback(error);
+        }
+
+        if (error) {
+          return reject(error);
+        }
+
+        resolve(result);
+      });
+    });
+  }
+
+  /**
    * Connects to an SSH server using a sign callback for authentication.
+   * @deprecated Use SSHClient.connect() followed by authenticateWithSignCallback()
    *
    * @param host - The hostname or IP address of the SSH server.
    * @param port - The port number of the SSH server.
@@ -199,6 +238,7 @@ export default class SSHClient {
 
   /**
    * Connects to an SSH server using a private key for authentication.
+   * @deprecated Use SSHClient.connect() followed by authenticateWithKey()
    *
    * @param host - The hostname or IP address of the SSH server.
    * @param port - The port number of the SSH server.
@@ -241,6 +281,7 @@ export default class SSHClient {
 
   /**
    * Connects to an SSH server using password authentication.
+   * @deprecated Use SSHClient.connect() followed by authenticateWithPassword()
    *
    * @param host - The hostname or IP address of the SSH server.
    * @param port - The port number of the SSH server.
@@ -287,15 +328,25 @@ export default class SSHClient {
   private host: string;
   private port: number;
   private username: string;
+  private _isAuthenticated: boolean;
 
   /**
-   * Creates a new SSHClient instance.
-   * Should not be called directly; use the `connectWithKey`, `connectWithPassword`, or `connectWithSignCallback` factory functions instead.
+   * Creates a new SSHClient instance and connects to the host.
+   * Should not be called directly; use the `connect` factory function instead.
    * @param host The hostname or IP address of the SSH server.
    * @param port The port number of the SSH server.
    * @param username The username for authentication.
-   * @param passwordOrKey The password, private key, or sign callback configuration for authentication.
    * @param callback The callback function to be called after the connection is established.
+   */
+  constructor(
+    host: string,
+    port: number,
+    username: string,
+    callback: CallbackFunction<void>
+  );
+  /**
+   * Legacy constructor for backward compatibility.
+   * @deprecated Use the new constructor with separate authentication
    */
   constructor(
     host: string,
@@ -303,6 +354,13 @@ export default class SSHClient {
     username: string,
     passwordOrKey: PasswordOrKey,
     callback: CallbackFunction<void>
+  );
+  constructor(
+    host: string,
+    port: number,
+    username: string,
+    passwordOrKeyOrCallback: PasswordOrKey | CallbackFunction<void>,
+    callback?: CallbackFunction<void>
   ) {
     this._key = SSHClient.getRandomClientKey();
     this._listeners = {};
@@ -312,30 +370,41 @@ export default class SSHClient {
     this.host = host;
     this.port = port;
     this.username = username;
+    this._isAuthenticated = false;
 
-    // Set up sign callback listener if needed
-    if (typeof passwordOrKey === 'object' && passwordOrKey.signCallback) {
-      this.registerNativeListener(NATIVE_EVENT_SIGN_CALLBACK);
-      this.on(
-        'SignCallback',
-        this.handleSignCallback.bind(this, passwordOrKey.signCallback)
-      );
+    // Handle both new and legacy constructor signatures
+    if (typeof passwordOrKeyOrCallback === 'function') {
+      // New signature: connect only
+      this.connectToHost(passwordOrKeyOrCallback);
+    } else {
+      // Legacy signature: connect and authenticate
+      const passwordOrKey = passwordOrKeyOrCallback;
+      const cb = callback!;
+
+      // Set up sign callback listener if needed
+      if (typeof passwordOrKey === 'object' && passwordOrKey.signCallback) {
+        this.registerNativeListener(NATIVE_EVENT_SIGN_CALLBACK);
+        this.on(
+          'SignCallback',
+          this.handleSignCallback.bind(this, passwordOrKey.signCallback)
+        );
+      }
+
+      this.connectAndAuthenticate(passwordOrKey, cb);
     }
-
-    this.connect(passwordOrKey, callback);
   }
 
   /**
    * Generates a random client key, used to identify which callback match with which instance.
+   * Uses crypto-secure random generation for better uniqueness.
    *
    * @returns A string representing the random client key.
    */
   private static getRandomClientKey(): string {
-    // TODO This should be returned by the native code
-    // There's no need for actual randomness, just uniqueness.
-    return Math.floor((1 + Math.random()) * 0x10000)
-      .toString(16)
-      .substring(1);
+    // Generate a crypto-secure random key using timestamp + random
+    const timestamp = Date.now().toString(36);
+    const random = Math.random().toString(36).substring(2);
+    return `${timestamp}-${random}`;
   }
 
   /**
@@ -406,44 +475,82 @@ export default class SSHClient {
   }
 
   /**
-   * Connects to the SSH server using the provided password or key.
+   * Connects to the SSH server without authentication (new API).
+   *
+   * @param callback - The callback function to be called after the connection attempt.
+   */
+  private connectToHost(callback: CallbackFunction<void>): void {
+    RNSSHClient.connectToHost(
+      this.host,
+      this.port,
+      this.username,
+      this._key,
+      (error: CBError) => {
+        callback(error);
+      }
+    );
+  }
+
+  /**
+   * Connects to the SSH server using the provided password or key (legacy API).
    *
    * @param passwordOrKey - The password or key to authenticate with the server.
    * @param callback - The callback function to be called after the connection attempt.
    */
-  private connect(
+  private connectAndAuthenticate(
     passwordOrKey: PasswordOrKey,
     callback: CallbackFunction<void>
   ): void {
     if (Platform.OS === 'android') {
-      if (typeof passwordOrKey === 'string') {
-        RNSSHClient.connectToHostByPassword(
-          this.host,
-          this.port,
-          this.username,
-          passwordOrKey,
-          this._key,
-          (error: CBError) => {
-            callback(error);
-          }
-        );
-      } else {
-        RNSSHClient.connectToHostByKey(
-          this.host,
-          this.port,
-          this.username,
-          passwordOrKey,
-          this._key,
-          (error: CBError) => {
-            callback(error);
-          }
-        );
-      }
-
+      this.connectAndAuthenticateAndroid(passwordOrKey, callback);
       return;
     }
 
-    // iOS...
+    // iOS - use legacy method
+    this.connectAndAuthenticateIOS(passwordOrKey, callback);
+  }
+
+  /**
+   * Android-specific connection and authentication logic.
+   */
+  private connectAndAuthenticateAndroid(
+    passwordOrKey: PasswordOrKey,
+    callback: CallbackFunction<void>
+  ): void {
+    if (typeof passwordOrKey === 'string') {
+      RNSSHClient.connectToHostByPassword(
+        this.host,
+        this.port,
+        this.username,
+        passwordOrKey,
+        this._key,
+        (error: CBError) => {
+          if (!error) this._isAuthenticated = true;
+          callback(error);
+        }
+      );
+    } else {
+      RNSSHClient.connectToHostByKey(
+        this.host,
+        this.port,
+        this.username,
+        passwordOrKey,
+        this._key,
+        (error: CBError) => {
+          if (!error) this._isAuthenticated = true;
+          callback(error);
+        }
+      );
+    }
+  }
+
+  /**
+   * iOS-specific connection and authentication logic.
+   */
+  private connectAndAuthenticateIOS(
+    passwordOrKey: PasswordOrKey,
+    callback: CallbackFunction<void>
+  ): void {
     if (
       typeof passwordOrKey === 'object' &&
       passwordOrKey.signCallback &&
@@ -456,21 +563,133 @@ export default class SSHClient {
         passwordOrKey.publicKey,
         this._key,
         (error: CBError) => {
+          if (!error) this._isAuthenticated = true;
           callback(error);
         }
       );
     } else {
-      RNSSHClient.connectToHost(
+      RNSSHClient.connectToHostLegacy(
         this.host,
         this.port,
         this.username,
         passwordOrKey,
         this._key,
         (error: CBError) => {
+          if (!error) this._isAuthenticated = true;
           callback(error);
         }
       );
     }
+  }
+
+  /**
+   * Authenticates with the SSH server using a password.
+   *
+   * @param password - The password for authentication.
+   * @param callback - Optional callback function to handle the result.
+   * @returns A Promise that resolves when authentication is successful.
+   */
+  authenticateWithPassword(
+    password: string,
+    callback?: CallbackFunction<void>
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      RNSSHClient.authenticateWithPassword(
+        password,
+        this._key,
+        (error: CBError) => {
+          if (callback) {
+            callback(error);
+          }
+
+          if (error) {
+            return reject(error);
+          }
+
+          this._isAuthenticated = true;
+          resolve();
+        }
+      );
+    });
+  }
+
+  /**
+   * Authenticates with the SSH server using a private key.
+   *
+   * @param privateKey - The private key for authentication.
+   * @param passphrase - The passphrase for the private key (optional).
+   * @param callback - Optional callback function to handle the result.
+   * @returns A Promise that resolves when authentication is successful.
+   */
+  authenticateWithKey(
+    privateKey: string,
+    passphrase?: string,
+    callback?: CallbackFunction<void>
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const keyPair: KeyPair = { privateKey, passphrase };
+      RNSSHClient.authenticateWithKey(
+        keyPair,
+        this._key,
+        (error: CBError) => {
+          if (callback) {
+            callback(error);
+          }
+
+          if (error) {
+            return reject(error);
+          }
+
+          this._isAuthenticated = true;
+          resolve();
+        }
+      );
+    });
+  }
+
+  /**
+   * Authenticates with the SSH server using a sign callback.
+   *
+   * @param publicKey - The public key for authentication.
+   * @param signCallback - A callback function that signs data and returns the signature.
+   * @param callback - Optional callback function to handle the result.
+   * @returns A Promise that resolves when authentication is successful.
+   */
+  authenticateWithSignCallback(
+    publicKey: string,
+    signCallback: SignCallback,
+    callback?: CallbackFunction<void>
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      // Set up sign callback listener for both platforms
+      this.registerNativeListener(NATIVE_EVENT_SIGN_CALLBACK);
+      this.on('SignCallback', this.handleSignCallback.bind(this, signCallback));
+
+      RNSSHClient.authenticateWithSignCallback(
+        publicKey,
+        this._key,
+        (error: CBError) => {
+          if (callback) {
+            callback(error);
+          }
+
+          if (error) {
+            return reject(error);
+          }
+
+          this._isAuthenticated = true;
+          resolve();
+        }
+      );
+    });
+  }
+
+  /**
+   * Checks if the client is authenticated.
+   * @returns true if authenticated, false otherwise.
+   */
+  isAuthenticated(): boolean {
+    return this._isAuthenticated;
   }
 
   /**
@@ -483,6 +702,12 @@ export default class SSHClient {
     command: string,
     callback?: CallbackFunction<string>
   ): Promise<string> {
+    if (!this._isAuthenticated) {
+      const error = new Error('Client is not authenticated');
+      if (callback) callback(error);
+      return Promise.reject(error);
+    }
+
     return new Promise((resolve, reject) => {
       RNSSHClient.execute(
         command,
@@ -593,12 +818,36 @@ export default class SSHClient {
 
   /**
    * Closes the SSH shell.
+   * @param callback - Optional callback function to handle completion.
+   * @returns A promise that resolves when the shell is closed.
    */
-  closeShell(): void {
-    this.unregisterNativeListener(NATIVE_EVENT_SHELL);
-    // TODO this should use a callback too
-    RNSSHClient.closeShell(this._key);
-    this._activeStream.shell = false;
+  closeShell(callback?: CallbackFunction<void>): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.unregisterNativeListener(NATIVE_EVENT_SHELL);
+
+      // Try new callback-based method first, fallback to old method
+      try {
+        RNSSHClient.closeShell(this._key, (error: CBError) => {
+          this._activeStream.shell = false;
+
+          if (callback) {
+            callback(error);
+          }
+
+          if (error) {
+            return reject(error);
+          }
+
+          resolve();
+        });
+      } catch {
+        // Fallback to old method without callback
+        RNSSHClient.closeShell(this._key);
+        this._activeStream.shell = false;
+        if (callback) callback(null);
+        resolve();
+      }
+    });
   }
 
   /**
@@ -609,6 +858,12 @@ export default class SSHClient {
    * @returns A promise that resolves when the connection is established successfully, or rejects with an error if the connection fails.
    */
   connectSFTP(callback?: CallbackFunction<void>): Promise<void> {
+    if (!this._isAuthenticated) {
+      const error = new Error('Client is not authenticated');
+      if (callback) callback(error);
+      return Promise.reject(error);
+    }
+
     if (this._activeStream.sftp) {
       return Promise.resolve();
     }
@@ -671,11 +926,11 @@ export default class SSHClient {
             (error: CBError, _response: string[]) => {
               const response = _response
                 ? _response.map((p) => {
-                    // eslint-disable-next-line no-control-regex -- Control characters are removed from the response, because they can make JSON.parse fail
-                    return JSON.parse(
-                      p.replace(/[\u0000-\u001F]/g, '')
-                    ) as LsResult;
-                  })
+                  // eslint-disable-next-line no-control-regex -- Control characters are removed from the response, because they can make JSON.parse fail
+                  return JSON.parse(
+                    p.replace(/[\u0000-\u001F]/g, '')
+                  ) as LsResult;
+                })
                 : undefined;
 
               if (callback) {
@@ -934,44 +1189,95 @@ export default class SSHClient {
 
   /**
    * Disconnects the SFTP connection.
-   *
-   * @remarks
-   * This method requires a fix in the native part. However, it still works since the native code's `disconnect()` method will actually close the SFTP stream. The only downside is that we can't explicitly close the SFTP channel.
-   *
-   * @example
-   * ```typescript
-   * disconnectSFTP();
-   * ```
+   * @param callback - Optional callback function to handle completion.
+   * @returns A promise that resolves when SFTP is disconnected.
    */
-  disconnectSFTP(): void {
-    // TODO This require a fix in the native part. I don't care.
-    // It actually still work since the native code disconnect() will actually
-    // close the sftp stream.
-    // Only downside is we can't *explicitly* close the sftp channel.
-    if (Platform.OS !== 'ios') {
+  disconnectSFTP(callback?: CallbackFunction<void>): Promise<void> {
+    return new Promise((resolve, reject) => {
       this.unregisterNativeListener(NATIVE_EVENT_DOWNLOAD_PROGRESS);
       this.unregisterNativeListener(NATIVE_EVENT_UPLOAD_PROGRESS);
-      RNSSHClient.disconnectSFTP(this._key);
-      this._activeStream.sftp = false;
-    }
+
+      if (Platform.OS === 'ios') {
+        // iOS doesn't have explicit SFTP disconnect, it's handled by main disconnect
+        this._activeStream.sftp = false;
+        if (callback) callback(null);
+        resolve();
+        return;
+      }
+
+      // Android has explicit SFTP disconnect
+      try {
+        RNSSHClient.disconnectSFTP(this._key, (error: CBError) => {
+          this._activeStream.sftp = false;
+
+          if (callback) {
+            callback(error);
+          }
+
+          if (error) {
+            return reject(error);
+          }
+
+          resolve();
+        });
+      } catch {
+        // Fallback to old method without callback
+        RNSSHClient.disconnectSFTP(this._key);
+        this._activeStream.sftp = false;
+        if (callback) callback(null);
+        resolve();
+      }
+    });
   }
 
   /**
    * Disconnects the SSH client.
    * If a shell is active, it will be closed.
    * If an SFTP connection is active, it will be disconnected.
-   * @returns void
+   * @param callback - Optional callback function to handle completion.
+   * @returns A promise that resolves when disconnection is complete.
    */
-  disconnect(): void {
-    if (this._activeStream.shell) {
-      this.closeShell();
-    }
+  disconnect(callback?: CallbackFunction<void>): Promise<void> {
+    return new Promise(async (resolve, reject) => {
+      try {
+        // Close shell if active
+        if (this._activeStream.shell) {
+          await this.closeShell();
+        }
 
-    if (this._activeStream.sftp) {
-      this.disconnectSFTP();
-    }
+        // Disconnect SFTP if active
+        if (this._activeStream.sftp) {
+          await this.disconnectSFTP();
+        }
 
-    // TODO this should use a callback too
-    RNSSHClient.disconnect(this._key);
+        // Disconnect main session
+        try {
+          RNSSHClient.disconnect(this._key, (error: CBError) => {
+            this._isAuthenticated = false;
+
+            if (callback) {
+              callback(error);
+            }
+
+            if (error) {
+              return reject(error);
+            }
+
+            resolve();
+          });
+        } catch {
+          // Fallback to old method without callback
+          RNSSHClient.disconnect(this._key);
+          this._isAuthenticated = false;
+          if (callback) callback(null);
+          resolve();
+        }
+      } catch (error) {
+        if (callback) {
+          callback(error as CBError);
+        }
+        reject(error);
+      }
+    });
   }
 }

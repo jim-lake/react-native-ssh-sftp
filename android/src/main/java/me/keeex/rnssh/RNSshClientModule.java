@@ -47,11 +47,17 @@ import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.bridge.Arguments;
 
 import com.jcraft.jsch.KeyPair;
+import com.jcraft.jsch.Identity;
+import com.jcraft.jsch.UserInfo;
 
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.ByteArrayOutputStream;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.UUID;
+import android.util.Base64;
 
 public class RNSshClientModule extends ReactContextBaseJavaModule {
   private class SSHClient {
@@ -65,11 +71,22 @@ public class RNSshClientModule extends ReactContextBaseJavaModule {
     Boolean _uploadContinue = false;
   }
 
+  private class SignRequest {
+    CountDownLatch latch;
+    String signature;
+    
+    SignRequest() {
+      this.latch = new CountDownLatch(1);
+      this.signature = null;
+    }
+  }
+
   private final ReactApplicationContext reactContext;
   private static final String LOGTAG = "RNSSHClient";
   private static final String DOWNLOAD_PATH = Environment.getExternalStorageDirectory().getPath();
 
   Map<String, SSHClient> clientPool = new HashMap<>();
+  Map<String, SignRequest> pendingSignRequests = new HashMap<>();
 
   public RNSshClientModule(ReactApplicationContext reactContext) {
     super(reactContext);
@@ -91,12 +108,275 @@ public class RNSshClientModule extends ReactContextBaseJavaModule {
 
   @ReactMethod
   private void connectToHostByPassword(final String host, final Integer port, final String username, final String passwordOrKey, final String key, final Callback callback) {
-    connectToHost(host, port, username, passwordOrKey, null, key, callback);
+    connectToHostLegacy(host, port, username, passwordOrKey, null, key, callback);
   }
 
   @ReactMethod
   private void connectToHostByKey(final String host, final Integer port, final String username, final ReadableMap passwordOrKey, final String key, final Callback callback) {
-    connectToHost(host, port, username, null, passwordOrKey, key, callback);
+    connectToHostLegacy(host, port, username, null, passwordOrKey, key, callback);
+  }
+
+  @ReactMethod
+  public void connectToHost(final String host, final Integer port, final String username, final String key, final Callback callback) {
+    new Thread(new Runnable() {
+      public void run() {
+        try {
+          JSch jsch = new JSch();
+          Session session = jsch.getSession(username, host, port);
+
+          Properties properties = new Properties();
+          properties.setProperty("StrictHostKeyChecking", "no");
+          session.setConfig(properties);
+          session.connect();
+
+          if (session.isConnected()) {
+            SSHClient client = new SSHClient();
+            client._session = session;
+            client._key = key;
+            clientPool.put(key, client);
+
+            Log.d(LOGTAG, "Session connected (not authenticated)");
+            callback.invoke();
+          }
+        } catch (JSchException error) {
+          Log.e(LOGTAG, "Connection failed: " + error.getMessage());
+          callback.invoke(error.getMessage());
+        } catch (Exception error) {
+          Log.e(LOGTAG, "Connection failed: " + error.getMessage());
+          callback.invoke(error.getMessage());
+        }
+      }
+    }).start();
+  }
+
+  @ReactMethod
+  public void authenticateWithPassword(final String password, final String key, final Callback callback) {
+    new Thread(new Runnable() {
+      public void run() {
+        try {
+          SSHClient client = clientPool.get(key);
+          if (client != null && client._session != null && client._session.isConnected()) {
+            // Disconnect current session
+            client._session.disconnect();
+            
+            // Create new session with password authentication
+            JSch jsch = new JSch();
+            Session session = jsch.getSession(client._session.getUserName(), client._session.getHost(), client._session.getPort());
+            session.setPassword(password);
+            
+            Properties properties = new Properties();
+            properties.setProperty("StrictHostKeyChecking", "no");
+            session.setConfig(properties);
+            session.connect();
+            
+            if (session.isConnected()) {
+              client._session = session;
+              Log.d(LOGTAG, "Password authentication successful");
+              callback.invoke();
+            } else {
+              Log.e(LOGTAG, "Password authentication failed");
+              callback.invoke("Password authentication failed");
+            }
+          } else {
+            callback.invoke("Client not connected");
+          }
+        } catch (JSchException error) {
+          Log.e(LOGTAG, "Authentication failed: " + error.getMessage());
+          callback.invoke(error.getMessage());
+        } catch (Exception error) {
+          Log.e(LOGTAG, "Authentication failed: " + error.getMessage());
+          callback.invoke(error.getMessage());
+        }
+      }
+    }).start();
+  }
+
+  @ReactMethod
+  public void authenticateWithKey(final ReadableMap keyPairs, final String key, final Callback callback) {
+    new Thread(new Runnable() {
+      public void run() {
+        try {
+          SSHClient client = clientPool.get(key);
+          if (client != null && client._session != null && client._session.isConnected()) {
+            // Store connection details
+            String username = client._session.getUserName();
+            String host = client._session.getHost();
+            int port = client._session.getPort();
+            
+            // Disconnect current session
+            client._session.disconnect();
+            
+            // Create new session with key authentication
+            JSch jsch = new JSch();
+            
+            byte[] privateKey = keyPairs.getString("privateKey").getBytes();
+            byte[] publicKey = keyPairs.hasKey("publicKey") ? keyPairs.getString("publicKey").getBytes() : null;
+            byte[] passphrase = keyPairs.hasKey("passphrase") ? keyPairs.getString("passphrase").getBytes() : null;
+            
+            jsch.addIdentity("default", privateKey, publicKey, passphrase);
+            
+            Session session = jsch.getSession(username, host, port);
+            
+            Properties properties = new Properties();
+            properties.setProperty("StrictHostKeyChecking", "no");
+            session.setConfig(properties);
+            session.connect();
+            
+            if (session.isConnected()) {
+              client._session = session;
+              Log.d(LOGTAG, "Key authentication successful");
+              callback.invoke();
+            } else {
+              Log.e(LOGTAG, "Key authentication failed");
+              callback.invoke("Key authentication failed");
+            }
+          } else {
+            callback.invoke("Client not connected");
+          }
+        } catch (JSchException error) {
+          Log.e(LOGTAG, "Authentication failed: " + error.getMessage());
+          callback.invoke(error.getMessage());
+        } catch (Exception error) {
+          Log.e(LOGTAG, "Authentication failed: " + error.getMessage());
+          callback.invoke(error.getMessage());
+        }
+      }
+    }).start();
+  }
+
+  @ReactMethod
+  public void provideSignature(String requestId, String signatureBase64) {
+    SignRequest request = pendingSignRequests.get(requestId);
+    if (request != null) {
+      request.signature = signatureBase64;
+      request.latch.countDown();
+    }
+  }
+
+  @ReactMethod
+  public void authenticateWithSignCallback(final String publicKey, final String key, final Callback callback) {
+    new Thread(new Runnable() {
+      public void run() {
+        try {
+          SSHClient client = clientPool.get(key);
+          if (client != null && client._session != null && client._session.isConnected()) {
+            // Store connection details
+            String username = client._session.getUserName();
+            String host = client._session.getHost();
+            int port = client._session.getPort();
+            
+            // Disconnect current session
+            client._session.disconnect();
+            
+            // Create new session with sign callback authentication
+            JSch jsch = new JSch();
+            
+            // Create custom identity for sign callback
+            Identity identity = new Identity() {
+              @Override
+              public boolean setPassphrase(byte[] passphrase) throws JSchException {
+                return true;
+              }
+              
+              @Override
+              public byte[] getPublicKeyBlob() {
+                try {
+                  return Base64.decode(publicKey.split(" ")[1], Base64.DEFAULT);
+                } catch (Exception e) {
+                  return publicKey.getBytes();
+                }
+              }
+              
+              @Override
+              public byte[] getSignature(byte[] data) {
+                try {
+                  String requestId = UUID.randomUUID().toString();
+                  String dataBase64 = Base64.encodeToString(data, Base64.DEFAULT);
+                  
+                  SignRequest signRequest = new SignRequest();
+                  pendingSignRequests.put(requestId, signRequest);
+                  
+                  // Send event to JavaScript
+                  WritableMap params = Arguments.createMap();
+                  params.putString("key", key);
+                  params.putString("requestId", requestId);
+                  params.putString("data", dataBase64);
+                  
+                  reactContext
+                    .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
+                    .emit("SignCallback", params);
+                  
+                  // Wait for JavaScript callback (30 second timeout)
+                  if (signRequest.latch.await(30, TimeUnit.SECONDS) && signRequest.signature != null) {
+                    byte[] signature = Base64.decode(signRequest.signature, Base64.DEFAULT);
+                    pendingSignRequests.remove(requestId);
+                    return signature;
+                  }
+                  
+                  pendingSignRequests.remove(requestId);
+                  throw new JSchException("Sign callback timeout or failed");
+                  
+                } catch (Exception e) {
+                  Log.e(LOGTAG, "Sign callback failed: " + e.getMessage());
+                  return null;
+                }
+              }
+              
+              @Override
+              public boolean decrypt() {
+                return true;
+              }
+              
+              @Override
+              public String getAlgName() {
+                return "ssh-rsa";
+              }
+              
+              @Override
+              public String getName() {
+                return "sign-callback";
+              }
+              
+              @Override
+              public boolean isEncrypted() {
+                return false;
+              }
+              
+              @Override
+              public void clear() {
+                // Nothing to clear
+              }
+            };
+            
+            jsch.addIdentity(identity, null);
+            
+            Session session = jsch.getSession(username, host, port);
+            
+            Properties properties = new Properties();
+            properties.setProperty("StrictHostKeyChecking", "no");
+            session.setConfig(properties);
+            session.connect();
+            
+            if (session.isConnected()) {
+              client._session = session;
+              Log.d(LOGTAG, "Sign callback authentication successful");
+              callback.invoke();
+            } else {
+              Log.e(LOGTAG, "Sign callback authentication failed");
+              callback.invoke("Sign callback authentication failed");
+            }
+          } else {
+            callback.invoke("Client not connected");
+          }
+        } catch (JSchException error) {
+          Log.e(LOGTAG, "Authentication failed: " + error.getMessage());
+          callback.invoke(error.getMessage());
+        } catch (Exception error) {
+          Log.e(LOGTAG, "Authentication failed: " + error.getMessage());
+          callback.invoke(error.getMessage());
+        }
+      }
+    }).start();
   }
   private int getKeyTypeFromString(String type) throws IllegalArgumentException {
     if (type == null) {
@@ -200,7 +480,7 @@ public class RNSshClientModule extends ReactContextBaseJavaModule {
 }
 
 
-  private void connectToHost(final String host, final Integer port, final String username,final String password, final ReadableMap keyPairs, final String key, final Callback callback) {
+  private void connectToHostLegacy(final String host, final Integer port, final String username,final String password, final ReadableMap keyPairs, final String key, final Callback callback) {
     new Thread(new Runnable()  {
       public void run() {
         try {
@@ -349,13 +629,14 @@ public class RNSshClientModule extends ReactContextBaseJavaModule {
   }
 
   @ReactMethod
-  public void closeShell(final String key) {
+  public void closeShell(final String key, final Callback callback) {
     new Thread(new Runnable()  {
       public void run() {
         try {
           SSHClient client = clientPool.get(key);
           if (client == null) {
-              throw new Exception("client is null");
+              callback.invoke("Client is null");
+              return;
           }
           if (client._channel != null) {
               client._channel.disconnect();
@@ -369,10 +650,14 @@ public class RNSshClientModule extends ReactContextBaseJavaModule {
           if (client._bufferedReader != null) {
               client._bufferedReader.close();
           }
+          
+          callback.invoke();
         } catch (IOException error) {
           Log.e(LOGTAG, "Error closing shell:" + error.getMessage());
+          callback.invoke(error.getMessage());
         } catch (Exception error) {
           Log.e(LOGTAG, "Error closing shell:" + error.getMessage());
+          callback.invoke(error.getMessage());
         }
       }
     }).start();
@@ -403,15 +688,23 @@ public class RNSshClientModule extends ReactContextBaseJavaModule {
   }
 
   @ReactMethod
-  public void disconnectSFTP(final String key) {
+  public void disconnectSFTP(final String key, final Callback callback) {
     new Thread(new Runnable()  {
       public void run() {
-        SSHClient client = clientPool.get(key);
-        if (client == null) {
-            return;
-        }
-        if (client._sftpSession != null) {
-          client._sftpSession.disconnect();
+        try {
+          SSHClient client = clientPool.get(key);
+          if (client == null) {
+              callback.invoke("Client is null");
+              return;
+          }
+          if (client._sftpSession != null) {
+            client._sftpSession.disconnect();
+            client._sftpSession = null;
+          }
+          callback.invoke();
+        } catch (Exception error) {
+          Log.e(LOGTAG, "Error disconnecting SFTP:" + error.getMessage());
+          callback.invoke(error.getMessage());
         }
       }
     }).start();
@@ -657,14 +950,25 @@ public class RNSshClientModule extends ReactContextBaseJavaModule {
   }
 
   @ReactMethod
-  public void disconnect(final String key) {
-    this.closeShell(key);
-    this.disconnectSFTP(key);
-
-    SSHClient client = clientPool.get(key);
-    if (client != null) {
-        client._session.disconnect();
-    }
+  public void disconnect(final String key, final Callback callback) {
+    new Thread(new Runnable() {
+      public void run() {
+        try {
+          SSHClient client = clientPool.get(key);
+          if (client != null) {
+            if (client._session != null) {
+              client._session.disconnect();
+            }
+            clientPool.remove(key);
+          }
+          callback.invoke();
+        } catch (Exception error) {
+          Log.e(LOGTAG, "Error disconnecting:" + error.getMessage());
+          callback.invoke(error.getMessage());
+        }
+      }
+    }).start();
+  }
   }
 
   private class progressMonitor implements SftpProgressMonitor {

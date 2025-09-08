@@ -58,8 +58,73 @@ All functions that run asynchronously where we have to wait for a result returns
 
 > [!NOTE]
 > On iOS, this package currently doesn't support the simulator, you will need to have your app running on a physical device. If you  would like to know more about this, see [this issue](https://github.com/dylankenneally/react-native-ssh-sftp/issues/20). I'd welcome a PR to resolve this.
->
-### Create a client using password authentication
+
+### New API (Recommended)
+
+The new API separates connection and authentication into distinct operations, allowing for more flexible authentication workflows.
+
+#### Connect to a host
+
+```javascript
+import SSHClient from '@dylankenneally/react-native-ssh-sftp';
+
+const client = await SSHClient.connect("10.0.0.10", 22, "user");
+```
+
+#### Authenticate with password
+
+```javascript
+await client.authenticateWithPassword("password");
+```
+
+#### Authenticate with private key
+
+```javascript
+const privateKey = "-----BEGIN RSA...";
+await client.authenticateWithKey(privateKey);
+
+// With passphrase
+await client.authenticateWithKey(privateKey, "passphrase");
+```
+
+#### Authenticate with sign callback
+
+```javascript
+const publicKey = "ssh-rsa AAAAB3NzaC1yc2EA......";
+const signCallback = async (data) => {
+  // Your signing implementation
+  return signature;
+};
+
+await client.authenticateWithSignCallback(publicKey, signCallback);
+```
+
+#### Check authentication status
+
+```javascript
+if (client.isAuthenticated()) {
+  // Client is ready for operations
+}
+```
+
+#### Multiple authentication attempts
+
+```javascript
+const client = await SSHClient.connect("10.0.0.10", 22, "user");
+
+try {
+  await client.authenticateWithPassword("password1");
+} catch (error) {
+  // Try different method
+  await client.authenticateWithKey(privateKey);
+}
+```
+
+### Legacy API (Deprecated)
+
+The legacy API combines connection and authentication in a single call. These methods are deprecated but still supported for backward compatibility.
+
+#### Create a client using password authentication
 
 ```javascript
 import SSHClient from '@dylankenneally/react-native-ssh-sftp';
@@ -72,7 +137,7 @@ SSHClient.connectWithPassword(
 ).then(client => {/*...*/});
 ```
 
-### Create a client using public key authentication
+#### Create a client using public key authentication
 
 ```javascript
 import SSHClient from 'react-native-ssh-sftp';

@@ -1,4 +1,5 @@
 #import <NMSSH/NMSSH.h>
+#import <React/RCTBridgeModule.h>
 
 @protocol SSHClientDelegate <NSObject>
 - (void) shellEvent:(NSString *)event withKey:(NSString *)key;
@@ -12,6 +13,8 @@
     @property(nonatomic, retain) NSString* _key;
     @property (assign) BOOL _downloadContinue;
     @property (assign) BOOL _uploadContinue;
+    @property(nonatomic, retain) NSString* _publicKey;
+    @property(nonatomic, copy) RCTResponseSenderBlock _authCallback;
 
     @property (nonatomic, weak) id <SSHClientDelegate> delegate;
 

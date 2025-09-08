@@ -71,22 +71,41 @@ export type PasswordOrKey = string | KeyPair;
 /**
  * Represents an SSH client that can connect to a remote server and perform various operations.
  * Instances of SSHClient are created using the following factory functions:
+ * - SSHClient.connect() - connects to host
+ * - client.authenticateWithPassword() - authenticates with password
+ * - client.authenticateWithKey() - authenticates with key
+ * - client.authenticateWithSignCallback() - authenticates with sign callback
+ *
+ * Legacy methods (deprecated):
  * - SSHClient.connectWithKey()
  * - SSHClient.connectWithPassword()
  */
 export default class SSHClient {
     /**
-    * Retrieves the details of an SSH key.
-    * @param key - The SSH private key as a string.
-    * @returns A Promise that resolves to the details of the key, including its type and size.
-    */
+     * Retrieves the details of an SSH key.
+     * @param key - The SSH private key as a string.
+     * @returns A Promise that resolves to the details of the key, including its type and size.
+     */
     static getKeyDetails(key: string): Promise<{
         keyType: string;
         keySize: number;
     }>;
     static generateKeyPair(type: string, passphrase?: string, keySize?: number, comment?: string): Promise<genKeyPair>;
     /**
+     * Connects to an SSH server without authentication.
+     *
+     * @param host - The hostname or IP address of the SSH server.
+     * @param port - The port number of the SSH server.
+     * @param username - The username for authentication.
+     * @param callback - A callback function to handle the connection result (optional).
+     *
+     * @returns A Promise that resolves to an instance of SSHClient if the connection is successful.
+     *          Otherwise, it rejects with an error.
+     */
+    static connect(host: string, port: number, username: string, callback?: CallbackFunction<SSHClient>): Promise<SSHClient>;
+    /**
      * Connects to an SSH server using a sign callback for authentication.
+     * @deprecated Use SSHClient.connect() followed by authenticateWithSignCallback()
      *
      * @param host - The hostname or IP address of the SSH server.
      * @param port - The port number of the SSH server.
@@ -101,6 +120,7 @@ export default class SSHClient {
     static connectWithSignCallback(host: string, port: number, username: string, publicKey: string, signCallback: SignCallback, callback?: CallbackFunction<SSHClient>): Promise<SSHClient>;
     /**
      * Connects to an SSH server using a private key for authentication.
+     * @deprecated Use SSHClient.connect() followed by authenticateWithKey()
      *
      * @param host - The hostname or IP address of the SSH server.
      * @param port - The port number of the SSH server.
@@ -115,6 +135,7 @@ export default class SSHClient {
     static connectWithKey(host: string, port: number, username: string, privateKey: string, passphrase?: string, callback?: CallbackFunction<SSHClient>): Promise<SSHClient>;
     /**
      * Connects to an SSH server using password authentication.
+     * @deprecated Use SSHClient.connect() followed by authenticateWithPassword()
      *
      * @param host - The hostname or IP address of the SSH server.
      * @param port - The port number of the SSH server.
@@ -133,18 +154,24 @@ export default class SSHClient {
     private host;
     private port;
     private username;
+    private _isAuthenticated;
     /**
-     * Creates a new SSHClient instance.
-     * Should not be called directly; use the `connectWithKey`, `connectWithPassword`, or `connectWithSignCallback` factory functions instead.
+     * Creates a new SSHClient instance and connects to the host.
+     * Should not be called directly; use the `connect` factory function instead.
      * @param host The hostname or IP address of the SSH server.
      * @param port The port number of the SSH server.
      * @param username The username for authentication.
-     * @param passwordOrKey The password, private key, or sign callback configuration for authentication.
      * @param callback The callback function to be called after the connection is established.
+     */
+    constructor(host: string, port: number, username: string, callback: CallbackFunction<void>);
+    /**
+     * Legacy constructor for backward compatibility.
+     * @deprecated Use the new constructor with separate authentication
      */
     constructor(host: string, port: number, username: string, passwordOrKey: PasswordOrKey, callback: CallbackFunction<void>);
     /**
      * Generates a random client key, used to identify which callback match with which instance.
+     * Uses crypto-secure random generation for better uniqueness.
      *
      * @returns A string representing the random client key.
      */
@@ -181,12 +208,57 @@ export default class SSHClient {
      */
     private handleSignCallback;
     /**
-     * Connects to the SSH server using the provided password or key.
+     * Connects to the SSH server without authentication (new API).
+     *
+     * @param callback - The callback function to be called after the connection attempt.
+     */
+    private connectToHost;
+    /**
+     * Connects to the SSH server using the provided password or key (legacy API).
      *
      * @param passwordOrKey - The password or key to authenticate with the server.
      * @param callback - The callback function to be called after the connection attempt.
      */
-    private connect;
+    private connectAndAuthenticate;
+    /**
+     * Android-specific connection and authentication logic.
+     */
+    private connectAndAuthenticateAndroid;
+    /**
+     * iOS-specific connection and authentication logic.
+     */
+    private connectAndAuthenticateIOS;
+    /**
+     * Authenticates with the SSH server using a password.
+     *
+     * @param password - The password for authentication.
+     * @param callback - Optional callback function to handle the result.
+     * @returns A Promise that resolves when authentication is successful.
+     */
+    authenticateWithPassword(password: string, callback?: CallbackFunction<void>): Promise<void>;
+    /**
+     * Authenticates with the SSH server using a private key.
+     *
+     * @param privateKey - The private key for authentication.
+     * @param passphrase - The passphrase for the private key (optional).
+     * @param callback - Optional callback function to handle the result.
+     * @returns A Promise that resolves when authentication is successful.
+     */
+    authenticateWithKey(privateKey: string, passphrase?: string, callback?: CallbackFunction<void>): Promise<void>;
+    /**
+     * Authenticates with the SSH server using a sign callback.
+     *
+     * @param publicKey - The public key for authentication.
+     * @param signCallback - A callback function that signs data and returns the signature.
+     * @param callback - Optional callback function to handle the result.
+     * @returns A Promise that resolves when authentication is successful.
+     */
+    authenticateWithSignCallback(publicKey: string, signCallback: SignCallback, callback?: CallbackFunction<void>): Promise<void>;
+    /**
+     * Checks if the client is authenticated.
+     * @returns true if authenticated, false otherwise.
+     */
+    isAuthenticated(): boolean;
     /**
      * Executes a command on the SSH server.
      * @param command The command to execute.
@@ -217,8 +289,10 @@ export default class SSHClient {
     writeToShell(command: string, callback?: CallbackFunction<string>): Promise<string>;
     /**
      * Closes the SSH shell.
+     * @param callback - Optional callback function to handle completion.
+     * @returns A promise that resolves when the shell is closed.
      */
-    closeShell(): void;
+    closeShell(callback?: CallbackFunction<void>): Promise<void>;
     /**
      * Connects to the SFTP server.
      *
@@ -305,23 +379,18 @@ export default class SSHClient {
     sftpCancelDownload(): void;
     /**
      * Disconnects the SFTP connection.
-     *
-     * @remarks
-     * This method requires a fix in the native part. However, it still works since the native code's `disconnect()` method will actually close the SFTP stream. The only downside is that we can't explicitly close the SFTP channel.
-     *
-     * @example
-     * ```typescript
-     * disconnectSFTP();
-     * ```
+     * @param callback - Optional callback function to handle completion.
+     * @returns A promise that resolves when SFTP is disconnected.
      */
-    disconnectSFTP(): void;
+    disconnectSFTP(callback?: CallbackFunction<void>): Promise<void>;
     /**
      * Disconnects the SSH client.
      * If a shell is active, it will be closed.
      * If an SFTP connection is active, it will be disconnected.
-     * @returns void
+     * @param callback - Optional callback function to handle completion.
+     * @returns A promise that resolves when disconnection is complete.
      */
-    disconnect(): void;
+    disconnect(callback?: CallbackFunction<void>): Promise<void>;
 }
 export {};
 //# sourceMappingURL=sshclient.d.ts.map

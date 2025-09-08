@@ -39,9 +39,10 @@ export interface LsResult {
  * Represents a key pair used for SSH authentication.
  */
 export interface KeyPair {
-    privateKey: string;
+    privateKey?: string;
     publicKey?: string;
     passphrase?: string;
+    signCallback?: SignCallback;
 }
 export interface genKeyPair {
     privateKey: string;
@@ -51,6 +52,18 @@ export interface keyDetail {
     keyType: string;
     keySize?: number;
 }
+/**
+ * Represents a sign callback event from the native layer.
+ */
+export interface SignCallbackEvent {
+    key: string;
+    requestId: string;
+    data: string;
+}
+/**
+ * Represents a sign callback function that returns a signature.
+ */
+export type SignCallback = (data: string) => Promise<string>;
 /**
  * Represents a password or key for authentication.
  */
@@ -72,6 +85,20 @@ export default class SSHClient {
         keySize: number;
     }>;
     static generateKeyPair(type: string, passphrase?: string, keySize?: number, comment?: string): Promise<genKeyPair>;
+    /**
+     * Connects to an SSH server using a sign callback for authentication.
+     *
+     * @param host - The hostname or IP address of the SSH server.
+     * @param port - The port number of the SSH server.
+     * @param username - The username for authentication.
+     * @param publicKey - The public key for authentication.
+     * @param signCallback - A callback function that signs data and returns the signature.
+     * @param callback - A callback function to handle the connection result (optional).
+     *
+     * @returns A Promise that resolves to an instance of SSHClient if the connection is successful.
+     *          Otherwise, it rejects with an error.
+     */
+    static connectWithSignCallback(host: string, port: number, username: string, publicKey: string, signCallback: SignCallback, callback?: CallbackFunction<SSHClient>): Promise<SSHClient>;
     /**
      * Connects to an SSH server using a private key for authentication.
      *
@@ -108,11 +135,11 @@ export default class SSHClient {
     private username;
     /**
      * Creates a new SSHClient instance.
-     * Should not be called directly; use the `connectWithKey` or `connectWithPassword` factory functions instead.
+     * Should not be called directly; use the `connectWithKey`, `connectWithPassword`, or `connectWithSignCallback` factory functions instead.
      * @param host The hostname or IP address of the SSH server.
      * @param port The port number of the SSH server.
      * @param username The username for authentication.
-     * @param passwordOrKey The password or private key for authentication.
+     * @param passwordOrKey The password, private key, or sign callback configuration for authentication.
      * @param callback The callback function to be called after the connection is established.
      */
     constructor(host: string, port: number, username: string, passwordOrKey: PasswordOrKey, callback: CallbackFunction<void>);
@@ -146,6 +173,13 @@ export default class SSHClient {
      * @param eventName - The name of the event.
      */
     private unregisterNativeListener;
+    /**
+     * Handles a sign callback event from the native layer.
+     *
+     * @param signCallback - The sign callback function to use.
+     * @param event - The sign callback event from native.
+     */
+    private handleSignCallback;
     /**
      * Connects to the SSH server using the provided password or key.
      *

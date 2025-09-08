@@ -3,7 +3,7 @@ import {
   NativeModules,
   NativeEventEmitter,
   DeviceEventEmitter,
-  EmitterSubscription
+  EmitterSubscription,
 } from 'react-native';
 
 const { RNSSHClient } = NativeModules;
@@ -13,6 +13,7 @@ const RNSSHClientEmitter = new NativeEventEmitter(RNSSHClient);
 const NATIVE_EVENT_SHELL = 'Shell';
 const NATIVE_EVENT_DOWNLOAD_PROGRESS = 'DownloadProgress';
 const NATIVE_EVENT_UPLOAD_PROGRESS = 'UploadProgress';
+const NATIVE_EVENT_SIGN_CALLBACK = 'SignCallback';
 
 interface NativeEvent {
   name: string;
@@ -66,9 +67,10 @@ export interface LsResult {
  * Represents a key pair used for SSH authentication.
  */
 export interface KeyPair {
-  privateKey: string;
+  privateKey?: string;
   publicKey?: string;
   passphrase?: string;
+  signCallback?: SignCallback;
 }
 
 export interface genKeyPair {
@@ -81,6 +83,19 @@ export interface keyDetail {
   keySize?: number;
 }
 
+/**
+ * Represents a sign callback event from the native layer.
+ */
+export interface SignCallbackEvent {
+  key: string;
+  requestId: string;
+  data: string; // base64 encoded data to sign
+}
+
+/**
+ * Represents a sign callback function that returns a signature.
+ */
+export type SignCallback = (data: string) => Promise<string>;
 
 /**
  * Represents a password or key for authentication.
@@ -95,43 +110,93 @@ export type PasswordOrKey = string | KeyPair;
  */
 export default class SSHClient {
   /**
-  * Retrieves the details of an SSH key.
-  * @param key - The SSH private key as a string.
-  * @returns A Promise that resolves to the details of the key, including its type and size.
-  */
-  static getKeyDetails(key: string): Promise<{ keyType: string, keySize: number }> {
+   * Retrieves the details of an SSH key.
+   * @param key - The SSH private key as a string.
+   * @returns A Promise that resolves to the details of the key, including its type and size.
+   */
+  static getKeyDetails(
+    key: string
+  ): Promise<{ keyType: string; keySize: number }> {
     return new Promise((resolve, reject) => {
       RNSSHClient.getKeyDetails(key)
         .then((result: keyDetail) => {
           /* eslint-disable no-console */
           console.log(result);
           /* eslint-enable no-console */
-          resolve({
-            keyType: result.keyType,
-            keySize: result.keySize || 0
-          });
+          resolve({ keyType: result.keyType, keySize: result.keySize || 0 });
         })
         .catch((error: CBError) => {
           reject(error);
         });
     });
   }
-  static generateKeyPair(type: string, passphrase?: string, keySize?: number, comment?: string): Promise<genKeyPair> {
+  static generateKeyPair(
+    type: string,
+    passphrase?: string,
+    keySize?: number,
+    comment?: string
+  ): Promise<genKeyPair> {
     return new Promise((resolve, reject) => {
-      RNSSHClient.generateKeyPair(type, passphrase, keySize, comment, (error: CBError, keys: KeyPair) => {
-
-        if (error) {
-          reject(error);
-        } else {
-          resolve({
-            privateKey: keys.privateKey,
-            publicKey: keys.publicKey,
-          });
+      RNSSHClient.generateKeyPair(
+        type,
+        passphrase,
+        keySize,
+        comment,
+        (error: CBError, keys: KeyPair) => {
+          if (error) {
+            reject(error);
+          } else {
+            resolve({
+              privateKey: keys.privateKey || '',
+              publicKey: keys.publicKey,
+            });
+          }
         }
-
-      });
+      );
     });
   }
+  /**
+   * Connects to an SSH server using a sign callback for authentication.
+   *
+   * @param host - The hostname or IP address of the SSH server.
+   * @param port - The port number of the SSH server.
+   * @param username - The username for authentication.
+   * @param publicKey - The public key for authentication.
+   * @param signCallback - A callback function that signs data and returns the signature.
+   * @param callback - A callback function to handle the connection result (optional).
+   *
+   * @returns A Promise that resolves to an instance of SSHClient if the connection is successful.
+   *          Otherwise, it rejects with an error.
+   */
+  static connectWithSignCallback(
+    host: string,
+    port: number,
+    username: string,
+    publicKey: string,
+    signCallback: SignCallback,
+    callback?: CallbackFunction<SSHClient>
+  ): Promise<SSHClient> {
+    return new Promise((resolve, reject) => {
+      const result = new SSHClient(
+        host,
+        port,
+        username,
+        { publicKey, signCallback },
+        (error: CBError) => {
+          if (callback) {
+            callback(error);
+          }
+
+          if (error) {
+            return reject(error);
+          }
+
+          resolve(result);
+        }
+      );
+    });
+  }
+
   /**
    * Connects to an SSH server using a private key for authentication.
    *
@@ -145,19 +210,31 @@ export default class SSHClient {
    * @returns A Promise that resolves to an instance of SSHClient if the connection is successful.
    *          Otherwise, it rejects with an error.
    */
-  static connectWithKey(host: string, port: number, username: string, privateKey: string, passphrase?: string, callback?: CallbackFunction<SSHClient>): Promise<SSHClient> {
+  static connectWithKey(
+    host: string,
+    port: number,
+    username: string,
+    privateKey: string,
+    passphrase?: string,
+    callback?: CallbackFunction<SSHClient>
+  ): Promise<SSHClient> {
     return new Promise((resolve, reject) => {
-      const result = new SSHClient(host, port, username, { privateKey, passphrase }, (error: CBError) => {
-        if (callback) {
-          callback(error);
-        }
+      const result = new SSHClient(
+        host,
+        port,
+        username,
+        { privateKey, passphrase },
+        (error: CBError) => {
+          if (callback) {
+            callback(error);
+          }
 
-        if (error) {
-          return reject(error);
-        }
+          if (error) {
+            return reject(error);
+          }
 
-        resolve(result);
-      }
+          resolve(result);
+        }
       );
     });
   }
@@ -173,27 +250,39 @@ export default class SSHClient {
    * @returns A Promise that resolves to an instance of SSHClient if the connection is successful.
    * @throws If there is an error during the connection process.
    */
-  static connectWithPassword(host: string, port: number, username: string, password: string, callback?: CallbackFunction<SSHClient>): Promise<SSHClient> {
+  static connectWithPassword(
+    host: string,
+    port: number,
+    username: string,
+    password: string,
+    callback?: CallbackFunction<SSHClient>
+  ): Promise<SSHClient> {
     return new Promise((resolve, reject) => {
-      const result = new SSHClient(host, port, username, password, (error: CBError) => {
-        if (callback) {
-          callback(error);
-        }
+      const result = new SSHClient(
+        host,
+        port,
+        username,
+        password,
+        (error: CBError) => {
+          if (callback) {
+            callback(error);
+          }
 
-        if (error) {
-          return reject(error);
-        }
+          if (error) {
+            return reject(error);
+          }
 
-        resolve(result);
-      });
+          resolve(result);
+        }
+      );
     });
   }
 
   // "unique" key to identify callback from native library
   private _key: string;
   private _listeners: Record<string, EmitterSubscription>;
-  private _counters: { download: number; upload: number; };
-  private _activeStream: { sftp: boolean; shell: boolean; };
+  private _counters: { download: number; upload: number };
+  private _activeStream: { sftp: boolean; shell: boolean };
   private _handlers: Record<string, EventHandler>;
   private host: string;
   private port: number;
@@ -201,28 +290,38 @@ export default class SSHClient {
 
   /**
    * Creates a new SSHClient instance.
-   * Should not be called directly; use the `connectWithKey` or `connectWithPassword` factory functions instead.
+   * Should not be called directly; use the `connectWithKey`, `connectWithPassword`, or `connectWithSignCallback` factory functions instead.
    * @param host The hostname or IP address of the SSH server.
    * @param port The port number of the SSH server.
    * @param username The username for authentication.
-   * @param passwordOrKey The password or private key for authentication.
+   * @param passwordOrKey The password, private key, or sign callback configuration for authentication.
    * @param callback The callback function to be called after the connection is established.
    */
-  constructor(host: string, port: number, username: string, passwordOrKey: PasswordOrKey, callback: CallbackFunction<void>) {
+  constructor(
+    host: string,
+    port: number,
+    username: string,
+    passwordOrKey: PasswordOrKey,
+    callback: CallbackFunction<void>
+  ) {
     this._key = SSHClient.getRandomClientKey();
     this._listeners = {};
-    this._counters = {
-      download: 0,
-      upload: 0,
-    };
-    this._activeStream = {
-      sftp: false,
-      shell: false,
-    };
+    this._counters = { download: 0, upload: 0 };
+    this._activeStream = { sftp: false, shell: false };
     this._handlers = {};
     this.host = host;
     this.port = port;
     this.username = username;
+
+    // Set up sign callback listener if needed
+    if (typeof passwordOrKey === 'object' && passwordOrKey.signCallback) {
+      this.registerNativeListener(NATIVE_EVENT_SIGN_CALLBACK);
+      this.on(
+        'SignCallback',
+        this.handleSignCallback.bind(this, passwordOrKey.signCallback)
+      );
+    }
+
     this.connect(passwordOrKey, callback);
   }
 
@@ -266,8 +365,12 @@ export default class SSHClient {
    * @param eventName - The name of the event to listen for.
    */
   private registerNativeListener(eventName: string): void {
-    const listenerInterface = Platform.OS === 'ios' ? RNSSHClientEmitter : DeviceEventEmitter;
-    this._listeners[eventName] = listenerInterface.addListener(eventName, this.handleEvent.bind(this));
+    const listenerInterface =
+      Platform.OS === 'ios' ? RNSSHClientEmitter : DeviceEventEmitter;
+    this._listeners[eventName] = listenerInterface.addListener(
+      eventName,
+      this.handleEvent.bind(this)
+    );
   }
 
   /**
@@ -283,24 +386,91 @@ export default class SSHClient {
   }
 
   /**
+   * Handles a sign callback event from the native layer.
+   *
+   * @param signCallback - The sign callback function to use.
+   * @param event - The sign callback event from native.
+   */
+  private async handleSignCallback(
+    signCallback: SignCallback,
+    event: SignCallbackEvent
+  ): Promise<void> {
+    try {
+      const signature = await signCallback(event.data);
+      RNSSHClient.provideSignature(event.requestId, signature);
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Sign callback failed:', error);
+      RNSSHClient.provideSignature(event.requestId, ''); // Provide empty signature on error
+    }
+  }
+
+  /**
    * Connects to the SSH server using the provided password or key.
    *
    * @param passwordOrKey - The password or key to authenticate with the server.
    * @param callback - The callback function to be called after the connection attempt.
    */
-  private connect(passwordOrKey: PasswordOrKey, callback: CallbackFunction<void>): void {
+  private connect(
+    passwordOrKey: PasswordOrKey,
+    callback: CallbackFunction<void>
+  ): void {
     if (Platform.OS === 'android') {
       if (typeof passwordOrKey === 'string') {
-        RNSSHClient.connectToHostByPassword(this.host, this.port, this.username, passwordOrKey, this._key, (error: CBError) => { callback(error); });
+        RNSSHClient.connectToHostByPassword(
+          this.host,
+          this.port,
+          this.username,
+          passwordOrKey,
+          this._key,
+          (error: CBError) => {
+            callback(error);
+          }
+        );
       } else {
-        RNSSHClient.connectToHostByKey(this.host, this.port, this.username, passwordOrKey, this._key, (error: CBError) => { callback(error); });
+        RNSSHClient.connectToHostByKey(
+          this.host,
+          this.port,
+          this.username,
+          passwordOrKey,
+          this._key,
+          (error: CBError) => {
+            callback(error);
+          }
+        );
       }
 
       return;
     }
 
     // iOS...
-    RNSSHClient.connectToHost(this.host, this.port, this.username, passwordOrKey, this._key, (error: CBError) => { callback(error); });
+    if (
+      typeof passwordOrKey === 'object' &&
+      passwordOrKey.signCallback &&
+      passwordOrKey.publicKey
+    ) {
+      RNSSHClient.connectWithSignCallback(
+        this.host,
+        this.port,
+        this.username,
+        passwordOrKey.publicKey,
+        this._key,
+        (error: CBError) => {
+          callback(error);
+        }
+      );
+    } else {
+      RNSSHClient.connectToHost(
+        this.host,
+        this.port,
+        this.username,
+        passwordOrKey,
+        this._key,
+        (error: CBError) => {
+          callback(error);
+        }
+      );
+    }
   }
 
   /**
@@ -309,19 +479,26 @@ export default class SSHClient {
    * @param callback Optional callback function to handle the result asynchronously.
    * @returns A promise that resolves with the response from the server.
    */
-  execute(command: string, callback?: CallbackFunction<string>): Promise<string> {
+  execute(
+    command: string,
+    callback?: CallbackFunction<string>
+  ): Promise<string> {
     return new Promise((resolve, reject) => {
-      RNSSHClient.execute(command, this._key, (error: CBError, response: string) => {
-        if (callback) {
-          callback(error, response);
-        }
+      RNSSHClient.execute(
+        command,
+        this._key,
+        (error: CBError, response: string) => {
+          if (callback) {
+            callback(error, response);
+          }
 
-        if (error) {
-          return reject(error);
-        }
+          if (error) {
+            return reject(error);
+          }
 
-        resolve(response);
-      });
+          resolve(response);
+        }
+      );
     });
   }
 
@@ -331,25 +508,32 @@ export default class SSHClient {
    * @param callback - Optional callback function to handle the response.
    * @returns A promise that resolves with the response from the server.
    */
-  startShell(ptyType: PtyType, callback?: CallbackFunction<string>): Promise<string> {
+  startShell(
+    ptyType: PtyType,
+    callback?: CallbackFunction<string>
+  ): Promise<string> {
     if (this._activeStream.shell) {
       return Promise.resolve('');
     }
 
     return new Promise((resolve, reject) => {
       this.registerNativeListener(NATIVE_EVENT_SHELL);
-      RNSSHClient.startShell(this._key, ptyType, (error: CBError, response: string) => {
-        if (callback) {
-          callback(error, response);
-        }
+      RNSSHClient.startShell(
+        this._key,
+        ptyType,
+        (error: CBError, response: string) => {
+          if (callback) {
+            callback(error, response);
+          }
 
-        if (error) {
-          return reject(error);
-        }
+          if (error) {
+            return reject(error);
+          }
 
-        this._activeStream.shell = true;
-        resolve(response);
-      });
+          this._activeStream.shell = true;
+          resolve(response);
+        }
+      );
     });
   }
 
@@ -381,21 +565,30 @@ export default class SSHClient {
    * @param callback - Optional callback function to handle the response.
    * @returns A promise that resolves with the response from the shell.
    */
-  writeToShell(command: string, callback?: CallbackFunction<string>): Promise<string> {
-    return this.checkShell(callback)
-      .then(() => new Promise((resolve, reject) => {
-        RNSSHClient.writeToShell(command, this._key, (error: CBError, response: string) => {
-          if (callback) {
-            callback(error, response);
-          }
+  writeToShell(
+    command: string,
+    callback?: CallbackFunction<string>
+  ): Promise<string> {
+    return this.checkShell(callback).then(
+      () =>
+        new Promise((resolve, reject) => {
+          RNSSHClient.writeToShell(
+            command,
+            this._key,
+            (error: CBError, response: string) => {
+              if (callback) {
+                callback(error, response);
+              }
 
-          if (error) {
-            return reject(error);
-          }
+              if (error) {
+                return reject(error);
+              }
 
-          resolve(response);
-        });
-      }));
+              resolve(response);
+            }
+          );
+        })
+    );
   }
 
   /**
@@ -443,19 +636,20 @@ export default class SSHClient {
    * @param callback - Optional callback function to handle errors.
    * @returns A promise that resolves when SFTP is active or rejects with an error.
    */
-  private checkSFTP<ResultType>(callback?: CallbackFunction<ResultType>): Promise<void> {
+  private checkSFTP<ResultType>(
+    callback?: CallbackFunction<ResultType>
+  ): Promise<void> {
     if (this._activeStream.sftp) {
       return Promise.resolve();
     }
 
-    return this.connectSFTP()
-      .catch((error: CBError) => {
-        if (callback) {
-          callback(error);
-        }
+    return this.connectSFTP().catch((error: CBError) => {
+      if (callback) {
+        callback(error);
+      }
 
-        throw error;
-      });
+      throw error;
+    });
   }
 
   /**
@@ -464,26 +658,39 @@ export default class SSHClient {
    * @param callback - Optional callback function to handle the result asynchronously.
    * @returns A promise that resolves to the result of the SFTP listing operation.
    */
-  sftpLs(path: string, callback?: CallbackFunction<LsResult[]>): Promise<LsResult[]> {
-    return this.checkSFTP(callback)
-      .then(() => new Promise((resolve, reject) => {
-        RNSSHClient.sftpLs(path, this._key, (error: CBError, _response: string[]) => {
-          const response = _response ? _response.map(p => {
-            // eslint-disable-next-line no-control-regex -- Control characters are removed from the response, because they can make JSON.parse fail
-            return JSON.parse(p.replace(/[\u0000-\u001F]/g, '')) as LsResult;
-          }) : undefined;
+  sftpLs(
+    path: string,
+    callback?: CallbackFunction<LsResult[]>
+  ): Promise<LsResult[]> {
+    return this.checkSFTP(callback).then(
+      () =>
+        new Promise((resolve, reject) => {
+          RNSSHClient.sftpLs(
+            path,
+            this._key,
+            (error: CBError, _response: string[]) => {
+              const response = _response
+                ? _response.map((p) => {
+                    // eslint-disable-next-line no-control-regex -- Control characters are removed from the response, because they can make JSON.parse fail
+                    return JSON.parse(
+                      p.replace(/[\u0000-\u001F]/g, '')
+                    ) as LsResult;
+                  })
+                : undefined;
 
-          if (callback) {
-            callback(error, response);
-          }
+              if (callback) {
+                callback(error, response);
+              }
 
-          if (error) {
-            return reject(error);
-          }
+              if (error) {
+                return reject(error);
+              }
 
-          resolve(response!);
-        });
-      }));
+              resolve(response!);
+            }
+          );
+        })
+    );
   }
 
   /**
@@ -493,22 +700,32 @@ export default class SSHClient {
    * @param callback An optional callback function to handle the result or error.
    * @returns A Promise that resolves when the file or directory is successfully renamed.
    */
-  sftpRename(oldPath: string, newPath: string, callback?: CallbackFunction<void>): Promise<void> {
-    return this.checkSFTP(callback)
-      .then(() => new Promise((resolve, reject) => {
-        RNSSHClient.sftpRename(oldPath, newPath, this._key, (error: CBError) => {
-          if (callback) {
-            callback(error);
-          }
+  sftpRename(
+    oldPath: string,
+    newPath: string,
+    callback?: CallbackFunction<void>
+  ): Promise<void> {
+    return this.checkSFTP(callback).then(
+      () =>
+        new Promise((resolve, reject) => {
+          RNSSHClient.sftpRename(
+            oldPath,
+            newPath,
+            this._key,
+            (error: CBError) => {
+              if (callback) {
+                callback(error);
+              }
 
-          if (error) {
-            return reject(error);
-          }
+              if (error) {
+                return reject(error);
+              }
 
-          resolve();
-        });
-      })
-      );
+              resolve();
+            }
+          );
+        })
+    );
   }
 
   /**
@@ -518,21 +735,22 @@ export default class SSHClient {
    * @returns A promise that resolves when the directory is created successfully.
    */
   sftpMkdir(path: string, callback?: CallbackFunction<void>): Promise<void> {
-    return this.checkSFTP(callback)
-      .then(() => new Promise((resolve, reject) => {
-        RNSSHClient.sftpMkdir(path, this._key, (error: CBError) => {
-          if (callback) {
-            callback(error);
-          }
+    return this.checkSFTP(callback).then(
+      () =>
+        new Promise((resolve, reject) => {
+          RNSSHClient.sftpMkdir(path, this._key, (error: CBError) => {
+            if (callback) {
+              callback(error);
+            }
 
-          if (error) {
-            return reject(error);
-          }
+            if (error) {
+              return reject(error);
+            }
 
-          resolve();
-        });
-      })
-      );
+            resolve();
+          });
+        })
+    );
   }
 
   /**
@@ -542,21 +760,22 @@ export default class SSHClient {
    * @returns A promise that resolves when the file is successfully removed.
    */
   sftpRm(path: string, callback?: CallbackFunction<void>): Promise<void> {
-    return this.checkSFTP(callback)
-      .then(() => new Promise((resolve, reject) => {
-        RNSSHClient.sftpRm(path, this._key, (error: CBError) => {
-          if (callback) {
-            callback(error);
-          }
+    return this.checkSFTP(callback).then(
+      () =>
+        new Promise((resolve, reject) => {
+          RNSSHClient.sftpRm(path, this._key, (error: CBError) => {
+            if (callback) {
+              callback(error);
+            }
 
-          if (error) {
-            return reject(error);
-          }
+            if (error) {
+              return reject(error);
+            }
 
-          resolve();
-        });
-      })
-      );
+            resolve();
+          });
+        })
+    );
   }
 
   /**
@@ -566,21 +785,22 @@ export default class SSHClient {
    * @returns A promise that resolves when the directory is successfully removed.
    */
   sftpRmdir(path: string, callback?: CallbackFunction<void>): Promise<void> {
-    return this.checkSFTP(callback)
-      .then(() => new Promise((resolve, reject) => {
-        RNSSHClient.sftpRmdir(path, this._key, (error: CBError) => {
-          if (callback) {
-            callback(error);
-          }
+    return this.checkSFTP(callback).then(
+      () =>
+        new Promise((resolve, reject) => {
+          RNSSHClient.sftpRmdir(path, this._key, (error: CBError) => {
+            if (callback) {
+              callback(error);
+            }
 
-          if (error) {
-            return reject(error);
-          }
+            if (error) {
+              return reject(error);
+            }
 
-          resolve();
-        });
-      })
-      );
+            resolve();
+          });
+        })
+    );
   }
 
   /**
@@ -592,22 +812,32 @@ export default class SSHClient {
    * @param callback - An optional callback function to handle the result or error.
    * @returns A Promise that resolves when the permissions are successfully changed.
    */
-  sftpChmod(path: string, permissions: number, callback?: CallbackFunction<void>): Promise<void> {
-    return this.checkSFTP(callback)
-      .then(() => new Promise((resolve, reject) => {
-        RNSSHClient.sftpChmod(path, permissions, this._key, (error: CBError) => {
-          if (callback) {
-            callback(error);
-          }
+  sftpChmod(
+    path: string,
+    permissions: number,
+    callback?: CallbackFunction<void>
+  ): Promise<void> {
+    return this.checkSFTP(callback).then(
+      () =>
+        new Promise((resolve, reject) => {
+          RNSSHClient.sftpChmod(
+            path,
+            permissions,
+            this._key,
+            (error: CBError) => {
+              if (callback) {
+                callback(error);
+              }
 
-          if (error) {
-            return reject(error);
-          }
+              if (error) {
+                return reject(error);
+              }
 
-          resolve();
-        });
-      })
-      );
+              resolve();
+            }
+          );
+        })
+    );
   }
 
   /**
@@ -617,24 +847,34 @@ export default class SSHClient {
    * @param callback - An optional callback function to be called after the upload is complete or an error occurs.
    * @returns A Promise that resolves when the upload is complete or rejects with an error.
    */
-  sftpUpload(localFilePath: string, remoteFilePath: string, callback?: CallbackFunction<void>): Promise<void> {
-    return this.checkSFTP(callback)
-      .then(() => new Promise((resolve, reject) => {
-        ++this._counters.upload;
-        RNSSHClient.sftpUpload(localFilePath, remoteFilePath, this._key, (error: CBError) => {
-          --this._counters.upload;
-          if (callback) {
-            callback(error);
-          }
+  sftpUpload(
+    localFilePath: string,
+    remoteFilePath: string,
+    callback?: CallbackFunction<void>
+  ): Promise<void> {
+    return this.checkSFTP(callback).then(
+      () =>
+        new Promise((resolve, reject) => {
+          ++this._counters.upload;
+          RNSSHClient.sftpUpload(
+            localFilePath,
+            remoteFilePath,
+            this._key,
+            (error: CBError) => {
+              --this._counters.upload;
+              if (callback) {
+                callback(error);
+              }
 
-          if (error) {
-            return reject(error);
-          }
+              if (error) {
+                return reject(error);
+              }
 
-          resolve();
-        });
-      })
-      );
+              resolve();
+            }
+          );
+        })
+    );
   }
 
   /**
@@ -653,24 +893,34 @@ export default class SSHClient {
    * @param callback - An optional callback function to handle the result of the download.
    * @returns A promise that resolves with the response string when the download is complete.
    */
-  sftpDownload(remoteFilePath: string, localFilePath: string, callback?: CallbackFunction<string>): Promise<string> {
-    return this.checkSFTP(callback)
-      .then(() => new Promise((resolve, reject) => {
-        ++this._counters.download;
-        RNSSHClient.sftpDownload(remoteFilePath, localFilePath, this._key, (error: CBError, response: string) => {
-          --this._counters.download;
-          if (callback) {
-            callback(error, response);
-          }
+  sftpDownload(
+    remoteFilePath: string,
+    localFilePath: string,
+    callback?: CallbackFunction<string>
+  ): Promise<string> {
+    return this.checkSFTP(callback).then(
+      () =>
+        new Promise((resolve, reject) => {
+          ++this._counters.download;
+          RNSSHClient.sftpDownload(
+            remoteFilePath,
+            localFilePath,
+            this._key,
+            (error: CBError, response: string) => {
+              --this._counters.download;
+              if (callback) {
+                callback(error, response);
+              }
 
-          if (error) {
-            return reject(error);
-          }
+              if (error) {
+                return reject(error);
+              }
 
-          resolve(response);
-        });
-      })
-      );
+              resolve(response);
+            }
+          );
+        })
+    );
   }
 
   /**

@@ -159,6 +159,24 @@ gabzR7vGspCHltGME7l7mIe6l13ixn8dd8ils2j97NjMbafncDkQM/uwsZaXU/JU
     }
   };
 
+  const testSignCallback = async () => {
+    setStatus('Testing Sign Callback...');
+    try {
+      const publicKey = `ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDHvQAKqP0nIGaYUL8WVt8EmT5WF+n5ntUE6N8MmL0co9DazxHB3fvehHPW86GIGR9hqAZGnLcPtoD2LArYEXuCVcebL/maTR9wDt3UZZQK4SzKNkr0xnMfH/GJ5GpXcnHYLZHcP9v1f9G2jvA5ON+8+mJuv0nVxVYR0SjgEzPBSKqSIAF88k8 test@example.com`;
+      
+      const signCallback = async (data) => {
+        // Mock signature - in real implementation this would use a hardware security module or similar
+        return 'mock-signature-base64-encoded';
+      };
+      
+      const client = await SSHClient.connectWithSignCallback('127.0.0.1', 2222, 'user', publicKey, signCallback);
+      setStatus('Sign Callback Connected!');
+      client.disconnect();
+    } catch (error) {
+      setStatus(`Sign Callback Failed: ${error.message}`);
+    }
+  };
+
   return (
     <View style={styles.container} testID="main-container">
       <Text style={styles.title} testID="title">SSH SFTP</Text>
@@ -181,6 +199,9 @@ gabzR7vGspCHltGME7l7mIe6l13ixn8dd8ils2j97NjMbafncDkQM/uwsZaXU/JU
         </TouchableOpacity>
         <TouchableOpacity style={styles.button} onPress={testSFTP} testID="sftp-test-button">
           <Text style={styles.buttonText}>F</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.button} onPress={testSignCallback} testID="sign-callback-button">
+          <Text style={styles.buttonText}>C</Text>
         </TouchableOpacity>
       </View>
     </View>

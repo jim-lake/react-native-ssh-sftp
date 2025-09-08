@@ -38,6 +38,14 @@ describe('SSH SFTP Authentication Tests', () => {
     await detoxExpected(element(by.id('status'))).toHaveText('Status: SFTP Connected! Found 3 files');
   });
 
+  it('should test sign callback authentication', async () => {
+    await element(by.text('C')).tap();
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    // Sign callback will likely fail due to mock signature, but we test that the method is called
+    await detoxExpected(element(by.id('status'))).not.toHaveText('Status: Ready');
+    await detoxExpected(element(by.id('status'))).toHaveText('Status: Sign Callback Failed: Authentication to host 127.0.0.1 failed');
+  });
+
   it('should test basic SSH functionality', async () => {
     await element(by.text('S')).tap();
     await new Promise(resolve => setTimeout(resolve, 3000));

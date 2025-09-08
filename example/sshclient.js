@@ -1,9 +1,19 @@
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 import { Platform, NativeModules, NativeEventEmitter, DeviceEventEmitter } from 'react-native';
 const { RNSSHClient } = NativeModules;
 const RNSSHClientEmitter = new NativeEventEmitter(RNSSHClient);
 const NATIVE_EVENT_SHELL = 'Shell';
 const NATIVE_EVENT_DOWNLOAD_PROGRESS = 'DownloadProgress';
 const NATIVE_EVENT_UPLOAD_PROGRESS = 'UploadProgress';
+const NATIVE_EVENT_SIGN_CALLBACK = 'SignCallback';
 /**
  * Represents the types of PTY (pseudo-terminal) for SSH connections.
  */
@@ -53,10 +63,36 @@ export default class SSHClient {
                 }
                 else {
                     resolve({
-                        privateKey: keys.privateKey,
+                        privateKey: keys.privateKey || '',
                         publicKey: keys.publicKey,
                     });
                 }
+            });
+        });
+    }
+    /**
+     * Connects to an SSH server using a sign callback for authentication.
+     *
+     * @param host - The hostname or IP address of the SSH server.
+     * @param port - The port number of the SSH server.
+     * @param username - The username for authentication.
+     * @param publicKey - The public key for authentication.
+     * @param signCallback - A callback function that signs data and returns the signature.
+     * @param callback - A callback function to handle the connection result (optional).
+     *
+     * @returns A Promise that resolves to an instance of SSHClient if the connection is successful.
+     *          Otherwise, it rejects with an error.
+     */
+    static connectWithSignCallback(host, port, username, publicKey, signCallback, callback) {
+        return new Promise((resolve, reject) => {
+            const result = new SSHClient(host, port, username, { publicKey, signCallback }, (error) => {
+                if (callback) {
+                    callback(error);
+                }
+                if (error) {
+                    return reject(error);
+                }
+                resolve(result);
             });
         });
     }
@@ -112,11 +148,11 @@ export default class SSHClient {
     }
     /**
      * Creates a new SSHClient instance.
-     * Should not be called directly; use the `connectWithKey` or `connectWithPassword` factory functions instead.
+     * Should not be called directly; use the `connectWithKey`, `connectWithPassword`, or `connectWithSignCallback` factory functions instead.
      * @param host The hostname or IP address of the SSH server.
      * @param port The port number of the SSH server.
      * @param username The username for authentication.
-     * @param passwordOrKey The password or private key for authentication.
+     * @param passwordOrKey The password, private key, or sign callback configuration for authentication.
      * @param callback The callback function to be called after the connection is established.
      */
     constructor(host, port, username, passwordOrKey, callback) {
@@ -134,6 +170,11 @@ export default class SSHClient {
         this.host = host;
         this.port = port;
         this.username = username;
+        // Set up sign callback listener if needed
+        if (typeof passwordOrKey === 'object' && passwordOrKey.signCallback) {
+            this.registerNativeListener(NATIVE_EVENT_SIGN_CALLBACK);
+            this.on('SignCallback', this.handleSignCallback.bind(this, passwordOrKey.signCallback));
+        }
         this.connect(passwordOrKey, callback);
     }
     /**
@@ -188,6 +229,25 @@ export default class SSHClient {
         }
     }
     /**
+     * Handles a sign callback event from the native layer.
+     *
+     * @param signCallback - The sign callback function to use.
+     * @param event - The sign callback event from native.
+     */
+    handleSignCallback(signCallback, event) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const signature = yield signCallback(event.data);
+                RNSSHClient.provideSignature(event.requestId, signature);
+            }
+            catch (error) {
+                // eslint-disable-next-line no-console
+                console.error('Sign callback failed:', error);
+                RNSSHClient.provideSignature(event.requestId, ''); // Provide empty signature on error
+            }
+        });
+    }
+    /**
      * Connects to the SSH server using the provided password or key.
      *
      * @param passwordOrKey - The password or key to authenticate with the server.
@@ -204,7 +264,12 @@ export default class SSHClient {
             return;
         }
         // iOS...
-        RNSSHClient.connectToHost(this.host, this.port, this.username, passwordOrKey, this._key, (error) => { callback(error); });
+        if (typeof passwordOrKey === 'object' && passwordOrKey.signCallback && passwordOrKey.publicKey) {
+            RNSSHClient.connectWithSignCallback(this.host, this.port, this.username, passwordOrKey.publicKey, this._key, (error) => { callback(error); });
+        }
+        else {
+            RNSSHClient.connectToHost(this.host, this.port, this.username, passwordOrKey, this._key, (error) => { callback(error); });
+        }
     }
     /**
      * Executes a command on the SSH server.

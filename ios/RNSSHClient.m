@@ -4,6 +4,7 @@
 
 @implementation RNSSHClient {
     NSMutableDictionary* _clientPool;
+    NSMutableDictionary* _pendingSignRequests;
 }
 
 RCT_EXPORT_MODULE();
@@ -15,7 +16,7 @@ RCT_EXPORT_MODULE();
 
 - (NSArray<NSString *> *)supportedEvents
 {
-    return @[@"Shell", @"DownloadProgress", @"UploadProgress"];
+    return @[@"Shell", @"DownloadProgress", @"UploadProgress", @"SignCallback"];
 }
 
 - (NSMutableDictionary*) clientPool {
@@ -23,6 +24,13 @@ RCT_EXPORT_MODULE();
         _clientPool = [NSMutableDictionary new];
     }
     return _clientPool;
+}
+
+- (NSMutableDictionary*) pendingSignRequests {
+    if (!_pendingSignRequests) {
+        _pendingSignRequests = [NSMutableDictionary new];
+    }
+    return _pendingSignRequests;
 }
 
 - (SSHClient*) clientForKey:(nonnull NSString*)key {
@@ -48,6 +56,98 @@ RCT_EXPORT_MODULE();
         NSLog(@"SFTP not connected");
         callback(@[@"SFTP not connected"]);
         return false;
+    }
+}
+
+RCT_EXPORT_METHOD(connectWithSignCallback:(NSString *)host
+                  port:(NSInteger)port
+                  withUsername:(NSString *)username
+                  publicKey:(NSString *)publicKey
+                  withKey:(nonnull NSString*)key
+                  withCallback:(RCTResponseSenderBlock)callback){
+    NMSSHSession* session = [NMSSHSession connectToHost:host
+                                                   port:port
+                                           withUsername:username];
+    if (session && session.isConnected) {
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+            NSData *publicKeyData = [publicKey dataUsingEncoding:NSUTF8StringEncoding];
+            
+            BOOL authenticated = [session authenticateByInMemoryPublicKey:publicKeyData
+                                                            signCallback:^int(NSData * _Nonnull data, NSData * _Nullable * _Nonnull signature) {
+                // Convert NSData to base64 string for JS callback
+                NSString *dataString = [data base64EncodedStringWithOptions:0];
+                NSString *requestId = [[NSUUID UUID] UUIDString];
+                
+                // Create a semaphore to wait for JS callback
+                dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
+                
+                // Store the semaphore and result pointer for this request
+                [[self pendingSignRequests] setObject:@{
+                    @"semaphore": semaphore,
+                    @"signature": [NSNull null]
+                } forKey:requestId];
+                
+                // Call JS callback on main thread
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    [self sendEventWithName:@"SignCallback" body:@{
+                        @"key": key,
+                        @"requestId": requestId,
+                        @"data": dataString
+                    }];
+                });
+                
+                // Wait for JS to call back with signature (timeout after 30 seconds)
+                dispatch_time_t timeout = dispatch_time(DISPATCH_TIME_NOW, 30 * NSEC_PER_SEC);
+                if (dispatch_semaphore_wait(semaphore, timeout) == 0) {
+                    NSDictionary *request = [[self pendingSignRequests] objectForKey:requestId];
+                    if (request && ![request[@"signature"] isEqual:[NSNull null]]) {
+                        NSData *resultSignature = request[@"signature"];
+                        *signature = resultSignature;
+                        [[self pendingSignRequests] removeObjectForKey:requestId];
+                        return 0; // Success
+                    }
+                }
+                
+                [[self pendingSignRequests] removeObjectForKey:requestId];
+                return -1; // Failure or timeout
+            }];
+
+            if (authenticated && session.isAuthorized) {
+                SSHClient* client = [[SSHClient alloc] init];
+                client._session = session;
+                client._key = key;
+                [[self clientPool] setObject:client forKey:key];
+                NSLog(@"Session connected with sign callback");
+                callback(@[]);
+            } else {
+                NSLog(@"Authentication with sign callback failed");
+                callback(@[[NSString stringWithFormat:@"Authentication to host %@ failed", host]]);
+            }
+        });
+    } else {
+        if (session) {
+            NSLog(@"Connection to host %@ failed", host);
+            callback(@[[NSString stringWithFormat:@"Connection to host %@ failed, with session", host]]);
+        } else {
+            NSLog(@"Connection to host %@ failed", host);
+            callback(@[[NSString stringWithFormat:@"Connection to host %@ failed, without session", host]]);
+        }
+    }
+}
+
+RCT_EXPORT_METHOD(provideSignature:(NSString *)requestId
+                  signature:(NSString *)signatureBase64) {
+    NSMutableDictionary *request = [[[self pendingSignRequests] objectForKey:requestId] mutableCopy];
+    if (request) {
+        NSData *signatureData = [[NSData alloc] initWithBase64EncodedString:signatureBase64 options:0];
+        if (signatureData) {
+            request[@"signature"] = signatureData;
+            [[self pendingSignRequests] setObject:request forKey:requestId];
+            
+            // Signal the semaphore to wake up the waiting thread
+            dispatch_semaphore_t semaphore = request[@"semaphore"];
+            dispatch_semaphore_signal(semaphore);
+        }
     }
 }
 

@@ -1,5 +1,5 @@
 import React, {useState} from 'react';
-import {View, Text, StyleSheet, Alert, TouchableOpacity} from 'react-native';
+import {View, Text, StyleSheet, Alert, TouchableOpacity, ScrollView} from 'react-native';
 import SSHClient from './sshclient.js';
 
 export default function App() {
@@ -187,9 +187,9 @@ gabzR7vGspCHltGME7l7mIe6l13ixn8dd8ils2j97NjMbafncDkQM/uwsZaXU/JU
 
   return (
     <View style={styles.container} testID="main-container">
-      <Text style={styles.title} testID="title">SSH SFTP</Text>
+      <Text style={styles.title} testID="title">SSH SFTP Example</Text>
       <Text style={styles.status} testID="status">Status: {status}</Text>
-      <View style={styles.buttonRow}>
+      <ScrollView style={styles.scrollView} testID="scroll-view">
         <TouchableOpacity style={styles.button} onPress={testConnection} testID="test-button">
           <Text style={styles.buttonText}>S</Text>
         </TouchableOpacity>
@@ -211,7 +211,7 @@ gabzR7vGspCHltGME7l7mIe6l13ixn8dd8ils2j97NjMbafncDkQM/uwsZaXU/JU
         <TouchableOpacity style={styles.button} onPress={testSignCallback} testID="sign-callback-button">
           <Text style={styles.buttonText}>C</Text>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -229,23 +229,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginBottom: 10,
   },
-  buttonRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  scrollView: {
+    flex: 1,
   },
   button: {
     backgroundColor: '#007AFF',
-    padding: 4,
-    borderRadius: 2,
-    width: 20,
-    height: 20,
-    marginHorizontal: 1,
+    padding: 15,
+    borderRadius: 5,
+    marginVertical: 5,
     alignItems: 'center',
     justifyContent: 'center',
   },
   buttonText: {
     color: 'white',
-    fontSize: 8,
+    fontSize: 16,
     fontWeight: 'bold',
   },
 });

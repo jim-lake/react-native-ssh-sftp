@@ -1,6 +1,6 @@
 {
   "name": "react-native-ssh-sftp",
-  "version": "1.5.22",
+  "version": "1.5.23",
   "description": "SSH and SFTP client library for React Native",
   "main": "dist/index.js",
   "scripts": {
@@ -57,7 +57,7 @@
   "files": [
     "android/",
     "ios/",
-    "lib/",
+    "dist/",
     "RNSSHClient.podspec"
   ],
   "devDependencies": {

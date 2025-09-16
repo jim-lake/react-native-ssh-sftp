@@ -185,6 +185,58 @@ gabzR7vGspCHltGME7l7mIe6l13ixn8dd8ils2j97NjMbafncDkQM/uwsZaXU/JU
     }
   };
 
+  const testBadPassword = async () => {
+    setStatus('Testing Bad Password...');
+    try {
+      const client = await SSHClient.connect('127.0.0.1', 2222, 'user');
+      await client.authenticateWithPassword('wrongpassword');
+      setStatus('Bad Password: Unexpected Success!');
+    } catch (error) {
+      setStatus('Bad Password: Authentication Failed (Expected)');
+      Alert.alert('Success', 'Bad password correctly rejected!');
+    }
+  };
+
+  const testBadRSAKey = async () => {
+    setStatus('Testing Bad RSA Key...');
+    try {
+      // This is a valid RSA key format but not authorized on the server
+      const badPrivateKey = `-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAABFwAAAAdzc2gtcn
+NhAAAAAwEAAQAAAQEA+hmTOoNduk0I6YkN//VM6bWJ4kAhce4jZBsHaiE7p8pQq4o4R2x3
+e5HnsgMOQp6s6WiiZJupwmgpvQVt24r6JMyy6DqY/30vJwn64GP+zjMblPCbRcULzm2M3i
+5q8ubu7kXoYXrjnIAIn69T7ScyTweNjyQcmerqV3d6FIeGeUyYbTrrTZT7a/zOOpEw4SMq
+/Min7JstLPND6qH8jeqRL7b52bugW/6t4nwA69q3YuuoDfDw/TVLSyUqo6vLjmyEJdSAZY
+X1jL/wtvJL7UzZ9lAQPPI4p5oskxoLzPbOUJFNvZRCL1HKkzPZpiD0fkMjgTQGLN5bnbp8
+5xrEA6OEyQAAA9Bj0N6HY9DehwAAAAdzc2gtcnNhAAABAQD6GZM6g126TQjpiQ3/9UzptY
+niQCFx7iNkGwdqITunylCrijhHbHd7keeyAw5CnqzpaKJkm6nCaCm9BW3bivokzLLoOpj/
+fS8nCfrgY/7OMxuU8JtFxQvObYzeLmry5u7uRehheuOcgAifr1PtJzJPB42PJByZ6upXd3
+oUh4Z5TJhtOutNlPtr/M46kTDhIyr8yKfsmy0s80PqofyN6pEvtvnZu6Bb/q3ifADr2rdi
+66gN8PD9NUtLJSqjq8uObIQl1IBlhfWMv/C28kvtTNn2UBA88jinmiyTGgvM9s5QkU29lE
+IvUcqTM9mmIPR+QyOBNAYs3ludunznGsQDo4TJAAAAAwEAAQAAAQBLMo9jA4aV8n2ggjX0
+ZNQIXS4lGfU0ZU681aeoEG/4ZktVGI0NZJ6UR+1rR6HtA/qnf298YpVrP5h1HgHHBgVqNS
+YBz0SbZQ9dZJHLECXX5+P+J034b2O6YJP/ZeOAP1FN0TUqwiFXt+Nf5/6LCsMEohe9FzWG
+TezB+cl6DLmxFG+C1Ovkeci6HWfmAA4wcey71Mwm1iHd6Bnxk93rvI2NUp1uEY5OOwAjQJ
+iW3axcZCYektCG4MfHsJwvZdKlyjf4xWj+nJabCtQAmRN/G94S+3mWx4Scc8UripWZgVb+
+YBgBbtn3kgNTexDTep/O2ELPb/sClU3oq9k/iUrgxDllAAAAgQDGkC8IdJoej9+8vPlbFQ
+5aMYO0RkJg7S0EYTONA9dWbaGvy6uH5LNuxif9UYBavn9i3qlnMnOT8Rg3bchjFlYwkMei
+nsz9I3HqiTg+VbCjnMl58jRAkZlcsdzHKhqkQWE0wUivrIcPgu4kUjc1k6RxTahePtaGfb
+UnY6zlcEwx0AAAAIEA/d7BlW+YAdsdVlEEsR+6FeeDv0ZGpb7Y06qpIhk43nlEV2FEtXs/
+lJaFjo2tPEzIsYESqVghs7Sy2MSF+DLpTHBdlNhAwPv2AX56K7d03kc2xQ7NYcX3bGZsHL
+5GieS+3vYFRDuvH5/EvdZXbhufvOpD8jCDT9OypqB40WN4+PMAAACBAPwyuLL8Z+FdI3dm
+fWnOX+hvHMPPa0SqZdgEp5+LQSKIgdne9/iw16Xw18aMMMps7VBkFqLgQywCyqocVpUlRj
+ZHp4MIrucCp598RYJcEsSTUMlWsHs2ffnuZphPpcAk5kq/NPEcSVa08G+xB7mhlPIPAlam
+xpWXeGkW2vnB3XpTAAAAFXVuYXV0aG9yaXplZEB0ZXN0LmNvbQECAwQF
+-----END OPENSSH PRIVATE KEY-----`;
+      const client = await SSHClient.connect('127.0.0.1', 2222, 'user');
+      await client.authenticateWithKey(badPrivateKey);
+      setStatus('Bad RSA Key: Unexpected Success!');
+    } catch (error) {
+      setStatus('Bad RSA Key: Authentication Failed (Expected)');
+      Alert.alert('Success', 'Bad RSA key correctly rejected!');
+    }
+  };
+
   return (
     <View style={styles.container} testID="main-container">
       <Text style={styles.title} testID="title">SSH SFTP Example</Text>
@@ -210,6 +262,12 @@ gabzR7vGspCHltGME7l7mIe6l13ixn8dd8ils2j97NjMbafncDkQM/uwsZaXU/JU
         </TouchableOpacity>
         <TouchableOpacity style={styles.button} onPress={testSignCallback} testID="sign-callback-button">
           <Text style={styles.buttonText}>C</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.button} onPress={testBadPassword} testID="bad-password-button">
+          <Text style={styles.buttonText}>BP</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.button} onPress={testBadRSAKey} testID="bad-rsa-key-button">
+          <Text style={styles.buttonText}>BR</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>

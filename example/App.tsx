@@ -245,31 +245,31 @@ xpWXeGkW2vnB3XpTAAAAFXVuYXV0aG9yaXplZEB0ZXN0LmNvbQECAwQF
       <Text style={styles.status} testID="status">Status: {status}</Text>
       <ScrollView style={styles.scrollView} testID="scroll-view">
         <TouchableOpacity style={styles.button} onPress={testConnection} testID="test-button">
-          <Text style={styles.buttonText}>S</Text>
+          <Text style={styles.buttonText}>test</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.button} onPress={testDockerConnection} testID="docker-test-button">
-          <Text style={styles.buttonText}>D</Text>
+          <Text style={styles.buttonText}>docker</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.button} onPress={testRSAKey} testID="rsa-key-button">
-          <Text style={styles.buttonText}>R</Text>
+          <Text style={styles.buttonText}>rsa</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.button} onPress={testOpenSSHKey} testID="openssh-key-button">
-          <Text style={styles.buttonText}>O</Text>
+          <Text style={styles.buttonText}>openssh</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.button} onPress={testEncryptedRSAKey} testID="encrypted-rsa-key-button">
-          <Text style={styles.buttonText}>E</Text>
+          <Text style={styles.buttonText}>encrypted rsa</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.button} onPress={testSFTP} testID="sftp-test-button">
-          <Text style={styles.buttonText}>F</Text>
+          <Text style={styles.buttonText}>sftp test</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.button} onPress={testSignCallback} testID="sign-callback-button">
-          <Text style={styles.buttonText}>C</Text>
+          <Text style={styles.buttonText}>sign callback</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.button} onPress={testBadPassword} testID="bad-password-button">
-          <Text style={styles.buttonText}>BP</Text>
+          <Text style={styles.buttonText}>bad password</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.button} onPress={testBadRSAKey} testID="bad-rsa-key-button">
-          <Text style={styles.buttonText}>BR</Text>
+          <Text style={styles.buttonText}>bad rsa</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>
@@ -278,6 +278,7 @@ xpWXeGkW2vnB3XpTAAAAFXVuYXV0aG9yaXplZEB0ZXN0LmNvbQECAwQF
 
 const styles = StyleSheet.create({
   container: {
+    marginTop: 100,
     flex: 1,
     padding: 10,
   },
@@ -294,7 +295,7 @@ const styles = StyleSheet.create({
   },
   button: {
     backgroundColor: '#007AFF',
-    padding: 15,
+    padding: 2,
     borderRadius: 5,
     marginVertical: 5,
     alignItems: 'center',

@@ -1,6 +1,6 @@
 import React, {useState} from 'react';
 import {View, Text, StyleSheet, Alert, TouchableOpacity, ScrollView} from 'react-native';
-import SSHClient from './sshclient.js';
+import SSHClient from 'react-native-ssh-sftp';
 
 export default function App() {
   const [status, setStatus] = useState('Ready');

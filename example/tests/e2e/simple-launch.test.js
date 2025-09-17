@@ -1,24 +1,15 @@
-const {device, element, by, expect: detoxExpect} = require('detox');
+const {device, element, by, expect: detoxExpected} = require('detox');
 
-describe('Simple App Launch Test', () => {
+describe('SSH SFTP Simple Launch Tests', () => {
   beforeAll(async () => {
     await device.launchApp({newInstance: true});
-  });
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  }, 30000);
 
-  it('should launch the app successfully', async () => {
-    // Wait for the app to load
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    
-    // Check if the main container is visible, fallback to title if not
-    try {
-      await detoxExpect(element(by.id('main-container'))).toBeVisible();
-    } catch (error) {
-      // Fallback to title element if main container visibility fails
-      await detoxExpect(element(by.id('title'))).toBeVisible();
-    }
-  });
-
-  it('should display the title', async () => {
-    await detoxExpect(element(by.id('title'))).toHaveText('SSH SFTP Example');
+  it('should launch app successfully', async () => {
+    // Check that the app launched and main elements are present
+    await detoxExpected(element(by.id('title'))).toBeVisible();
+    await detoxExpected(element(by.id('title'))).toHaveText('SSH SFTP Example');
+    await detoxExpected(element(by.id('status'))).toHaveText('Status: Ready');
   });
 });

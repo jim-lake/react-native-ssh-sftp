@@ -17,14 +17,14 @@ describe('SSH SFTP Negative Authentication Tests', () => {
   });
 
   it('should reject bad password authentication', async () => {
-    await element(by.text('BP')).tap();
+    await element(by.id('bad-password-button')).tap();
     await new Promise(resolve => setTimeout(resolve, 4000));
     // Check that authentication failed as expected
     await detoxExpected(element(by.id('status'))).toHaveText('Status: Bad Password: Authentication Failed (Expected)');
   });
 
   it('should reject unauthorized RSA key authentication', async () => {
-    await element(by.text('BR')).tap();
+    await element(by.id('bad-rsa-key-button')).tap();
     await new Promise(resolve => setTimeout(resolve, 4000));
     // Check that authentication failed as expected
     await detoxExpected(element(by.id('status'))).toHaveText('Status: Bad RSA Key: Authentication Failed (Expected)');

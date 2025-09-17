@@ -245,31 +245,31 @@ xpWXeGkW2vnB3XpTAAAAFXVuYXV0aG9yaXplZEB0ZXN0LmNvbQECAwQF
       <Text style={styles.status} testID="status">Status: {status}</Text>
       <ScrollView style={styles.scrollView} testID="scroll-view">
         <TouchableOpacity style={styles.button} onPress={testConnection} testID="test-button">
-          <Text style={styles.buttonText}>test</Text>
+          <Text style={styles.buttonText}>Test SSH</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.button} onPress={testDockerConnection} testID="docker-test-button">
-          <Text style={styles.buttonText}>docker</Text>
+          <Text style={styles.buttonText}>Docker SSH</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.button} onPress={testRSAKey} testID="rsa-key-button">
-          <Text style={styles.buttonText}>rsa</Text>
+          <Text style={styles.buttonText}>RSA Key</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.button} onPress={testOpenSSHKey} testID="openssh-key-button">
-          <Text style={styles.buttonText}>openssh</Text>
+          <Text style={styles.buttonText}>OpenSSH Key</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.button} onPress={testEncryptedRSAKey} testID="encrypted-rsa-key-button">
-          <Text style={styles.buttonText}>encrypted rsa</Text>
+          <Text style={styles.buttonText}>Encrypted RSA</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.button} onPress={testSFTP} testID="sftp-test-button">
-          <Text style={styles.buttonText}>sftp test</Text>
+          <Text style={styles.buttonText}>SFTP Test</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.button} onPress={testSignCallback} testID="sign-callback-button">
-          <Text style={styles.buttonText}>sign callback</Text>
+          <Text style={styles.buttonText}>Sign Callback</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.button} onPress={testBadPassword} testID="bad-password-button">
-          <Text style={styles.buttonText}>bad password</Text>
+          <Text style={styles.buttonText}>Bad Password</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.button} onPress={testBadRSAKey} testID="bad-rsa-key-button">
-          <Text style={styles.buttonText}>bad rsa</Text>
+          <Text style={styles.buttonText}>Bad RSA Key</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>

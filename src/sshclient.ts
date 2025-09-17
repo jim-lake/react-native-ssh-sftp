@@ -36,6 +36,32 @@ export enum PtyType {
 type CBError = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 /**
+ * Enhanced error type that includes errno from native layer
+ */
+export interface SSHError extends Error {
+  errno?: number;
+}
+
+/**
+ * Creates an enhanced error object with errno if available
+ */
+function createSSHError(error: CBError): SSHError {
+  if (typeof error === 'object' && error !== null) {
+    if (error.message && typeof error.errno === 'number') {
+      const sshError = new Error(error.message) as SSHError;
+      sshError.errno = error.errno;
+      return sshError;
+    }
+  }
+
+  if (typeof error === 'string') {
+    return new Error(error) as SSHError;
+  }
+
+  return error as SSHError;
+}
+
+/**
  * Represents a callback function with an optional response.
  * @template T The type of the response.
  * @param error The error object, if any.
@@ -486,7 +512,7 @@ export default class SSHClient {
       this.username,
       this._key,
       (error: CBError) => {
-        callback(error);
+        callback(error ? createSSHError(error) : null);
       }
     );
   }
@@ -526,7 +552,7 @@ export default class SSHClient {
         this._key,
         (error: CBError) => {
           if (!error) this._isAuthenticated = true;
-          callback(error);
+          callback(error ? createSSHError(error) : null);
         }
       );
     } else {
@@ -538,7 +564,7 @@ export default class SSHClient {
         this._key,
         (error: CBError) => {
           if (!error) this._isAuthenticated = true;
-          callback(error);
+          callback(error ? createSSHError(error) : null);
         }
       );
     }
@@ -564,7 +590,7 @@ export default class SSHClient {
         this._key,
         (error: CBError) => {
           if (!error) this._isAuthenticated = true;
-          callback(error);
+          callback(error ? createSSHError(error) : null);
         }
       );
     } else {
@@ -576,7 +602,7 @@ export default class SSHClient {
         this._key,
         (error: CBError) => {
           if (!error) this._isAuthenticated = true;
-          callback(error);
+          callback(error ? createSSHError(error) : null);
         }
       );
     }
@@ -599,11 +625,11 @@ export default class SSHClient {
         this._key,
         (error: CBError) => {
           if (callback) {
-            callback(error);
+            callback(error ? createSSHError(error) : null);
           }
 
           if (error) {
-            return reject(error);
+            return reject(createSSHError(error));
           }
 
           this._isAuthenticated = true;
@@ -633,11 +659,11 @@ export default class SSHClient {
         this._key,
         (error: CBError) => {
           if (callback) {
-            callback(error);
+            callback(error ? createSSHError(error) : null);
           }
 
           if (error) {
-            return reject(error);
+            return reject(createSSHError(error));
           }
 
           this._isAuthenticated = true;
@@ -670,11 +696,11 @@ export default class SSHClient {
         this._key,
         (error: CBError) => {
           if (callback) {
-            callback(error);
+            callback(error ? createSSHError(error) : null);
           }
 
           if (error) {
-            return reject(error);
+            return reject(createSSHError(error));
           }
 
           this._isAuthenticated = true;

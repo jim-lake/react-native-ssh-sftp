@@ -65,14 +65,24 @@ RCT_EXPORT_METHOD(connectWithSignCallback:(NSString *)host
                   publicKey:(NSString *)publicKey
                   withKey:(nonnull NSString*)key
                   withCallback:(RCTResponseSenderBlock)callback){
-    NMSSHSession* session = [NMSSHSession connectToHost:host
-                                                   port:port
-                                           withUsername:username];
-    if (session && session.isConnected) {
+    NMSSHSession* session = [[NMSSHSession alloc] initWithHost:host port:port andUsername:username];
+    if (!session) {
+        NSString* errorMsg = [NSString stringWithFormat:@"Failed to initialize session for host %@", host];
+        NSLog(@"%@", errorMsg);
+        NSDictionary* errorDict = @{
+            @"message": errorMsg,
+            @"errno": @(-2)
+        };
+        callback(@[errorDict]);
+        return;
+    }
+    
+    int connectResult = [session connect];
+    if (connectResult == 0 && session.isConnected) {
         dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
             NSData *publicKeyData = [publicKey dataUsingEncoding:NSUTF8StringEncoding];
             
-            BOOL authenticated = [session authenticateByInMemoryPublicKey:publicKeyData
+            int authResult = [session authenticateByInMemoryPublicKey:publicKeyData
                                                             signCallback:^int(NSData * _Nonnull data, NSData * _Nullable * _Nonnull signature) {
                 // Convert NSData to base64 string for JS callback
                 NSString *dataString = [data base64EncodedStringWithOptions:0];
@@ -112,7 +122,7 @@ RCT_EXPORT_METHOD(connectWithSignCallback:(NSString *)host
                 return -1; // Failure or timeout
             }];
 
-            if (authenticated && session.isAuthorized) {
+            if (authResult == 0 && session.isAuthorized) {
                 SSHClient* client = [[SSHClient alloc] init];
                 client._session = session;
                 client._key = key;
@@ -120,18 +130,23 @@ RCT_EXPORT_METHOD(connectWithSignCallback:(NSString *)host
                 NSLog(@"Session connected with sign callback");
                 callback(@[]);
             } else {
-                NSLog(@"Authentication with sign callback failed");
-                callback(@[[NSString stringWithFormat:@"Authentication to host %@ failed", host]]);
+                NSString* errorMsg = [NSString stringWithFormat:@"Authentication to host %@ failed with error code %d", host, authResult];
+                NSLog(@"%@", errorMsg);
+                NSDictionary* errorDict = @{
+                    @"message": errorMsg,
+                    @"errno": @(authResult)
+                };
+                callback(@[errorDict]);
             }
         });
     } else {
-        if (session) {
-            NSLog(@"Connection to host %@ failed", host);
-            callback(@[[NSString stringWithFormat:@"Connection to host %@ failed, with session", host]]);
-        } else {
-            NSLog(@"Connection to host %@ failed", host);
-            callback(@[[NSString stringWithFormat:@"Connection to host %@ failed, without session", host]]);
-        }
+        NSString* errorMsg = [NSString stringWithFormat:@"Connection to host %@ failed with error code %d", host, connectResult];
+        NSLog(@"%@", errorMsg);
+        NSDictionary* errorDict = @{
+            @"message": errorMsg,
+            @"errno": @(connectResult)
+        };
+        callback(@[errorDict]);
     }
 }
 
@@ -156,10 +171,20 @@ RCT_EXPORT_METHOD(connectToHost:(NSString *)host
                   withUsername:(NSString *)username
                   withKey:(nonnull NSString*)key
                   withCallback:(RCTResponseSenderBlock)callback){
-    NMSSHSession* session = [NMSSHSession connectToHost:host
-                                                   port:port
-                                           withUsername:username];
-    if (session && session.isConnected) {
+    NMSSHSession* session = [[NMSSHSession alloc] initWithHost:host port:port andUsername:username];
+    if (!session) {
+        NSString* errorMsg = [NSString stringWithFormat:@"Failed to initialize session for host %@", host];
+        NSLog(@"%@", errorMsg);
+        NSDictionary* errorDict = @{
+            @"message": errorMsg,
+            @"errno": @(-2)
+        };
+        callback(@[errorDict]);
+        return;
+    }
+    
+    int connectResult = [session connect];
+    if (connectResult == 0 && session.isConnected) {
         SSHClient* client = [[SSHClient alloc] init];
         client._session = session;
         client._key = key;
@@ -167,13 +192,13 @@ RCT_EXPORT_METHOD(connectToHost:(NSString *)host
         NSLog(@"Session connected (not authenticated)");
         callback(@[]);
     } else {
-        if (session) {
-            NSLog(@"Connection to host %@ failed", host);
-            callback(@[[NSString stringWithFormat:@"Connection to host %@ failed, with session", host]]);
-        } else {
-            NSLog(@"Connection to host %@ failed", host);
-            callback(@[[NSString stringWithFormat:@"Connection to host %@ failed, without session", host]]);
-        }
+        NSString* errorMsg = [NSString stringWithFormat:@"Connection to host %@ failed with error code %d", host, connectResult];
+        NSLog(@"%@", errorMsg);
+        NSDictionary* errorDict = @{
+            @"message": errorMsg,
+            @"errno": @(connectResult)
+        };
+        callback(@[errorDict]);
     }
 }
 
@@ -183,17 +208,26 @@ RCT_EXPORT_METHOD(authenticateWithPassword:(NSString *)password
     SSHClient* client = [self clientForKey:key];
     if (client && client._session && client._session.isConnected) {
         dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-            [client._session authenticateByPassword:password];
-            if (client._session.isAuthorized) {
+            int authResult = [client._session authenticateByPassword:password];
+            if (authResult == 0 && client._session.isAuthorized) {
                 NSLog(@"Password authentication successful");
                 callback(@[]);
             } else {
-                NSLog(@"Password authentication failed");
-                callback(@[@"Password authentication failed"]);
+                NSString* errorMsg = [NSString stringWithFormat:@"Password authentication failed with error code %d", authResult];
+                NSLog(@"%@", errorMsg);
+                NSDictionary* errorDict = @{
+                    @"message": errorMsg,
+                    @"errno": @(authResult)
+                };
+                callback(@[errorDict]);
             }
         });
     } else {
-        callback(@[@"Client not connected"]);
+        NSDictionary* errorDict = @{
+            @"message": @"Client not connected",
+            @"errno": @(-1)
+        };
+        callback(@[errorDict]);
     }
 }
 
@@ -203,19 +237,28 @@ RCT_EXPORT_METHOD(authenticateWithKey:(NSDictionary *)keyPair
     SSHClient* client = [self clientForKey:key];
     if (client && client._session && client._session.isConnected) {
         dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-            [client._session authenticateByInMemoryPublicKey:[keyPair objectForKey:@"publicKey"] 
-                                                  privateKey:[keyPair objectForKey:@"privateKey"] 
-                                                 andPassword:[keyPair objectForKey:@"passphrase"]];
-            if (client._session.isAuthorized) {
+            int authResult = [client._session authenticateByInMemoryPublicKey:[keyPair objectForKey:@"publicKey"] 
+                                                                   privateKey:[keyPair objectForKey:@"privateKey"] 
+                                                                  andPassword:[keyPair objectForKey:@"passphrase"]];
+            if (authResult == 0 && client._session.isAuthorized) {
                 NSLog(@"Key authentication successful");
                 callback(@[]);
             } else {
-                NSLog(@"Key authentication failed");
-                callback(@[@"Key authentication failed"]);
+                NSString* errorMsg = [NSString stringWithFormat:@"Key authentication failed with error code %d", authResult];
+                NSLog(@"%@", errorMsg);
+                NSDictionary* errorDict = @{
+                    @"message": errorMsg,
+                    @"errno": @(authResult)
+                };
+                callback(@[errorDict]);
             }
         });
     } else {
-        callback(@[@"Client not connected"]);
+        NSDictionary* errorDict = @{
+            @"message": @"Client not connected",
+            @"errno": @(-1)
+        };
+        callback(@[errorDict]);
     }
 }
 
@@ -227,7 +270,7 @@ RCT_EXPORT_METHOD(authenticateWithSignCallback:(NSString *)publicKey
         dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
             NSData *publicKeyData = [publicKey dataUsingEncoding:NSUTF8StringEncoding];
             
-            BOOL authenticated = [client._session authenticateByInMemoryPublicKey:publicKeyData
+            int authResult = [client._session authenticateByInMemoryPublicKey:publicKeyData
                                                             signCallback:^int(NSData * _Nonnull data, NSData * _Nullable * _Nonnull signature) {
                 // Convert NSData to base64 string for JS callback
                 NSString *dataString = [data base64EncodedStringWithOptions:0];
@@ -267,16 +310,25 @@ RCT_EXPORT_METHOD(authenticateWithSignCallback:(NSString *)publicKey
                 return -1; // Failure or timeout
             }];
 
-            if (authenticated && client._session.isAuthorized) {
+            if (authResult == 0 && client._session.isAuthorized) {
                 NSLog(@"Sign callback authentication successful");
                 callback(@[]);
             } else {
-                NSLog(@"Sign callback authentication failed");
-                callback(@[@"Sign callback authentication failed"]);
+                NSString* errorMsg = [NSString stringWithFormat:@"Sign callback authentication failed with error code %d", authResult];
+                NSLog(@"%@", errorMsg);
+                NSDictionary* errorDict = @{
+                    @"message": errorMsg,
+                    @"errno": @(authResult)
+                };
+                callback(@[errorDict]);
             }
         });
     } else {
-        callback(@[@"Client not connected"]);
+        NSDictionary* errorDict = @{
+            @"message": @"Client not connected",
+            @"errno": @(-1)
+        };
+        callback(@[errorDict]);
     }
 }
 
@@ -287,38 +339,55 @@ RCT_EXPORT_METHOD(connectToHostLegacy:(NSString *)host
                   passwordOrKey:(id) passwordOrKey
                   withKey:(nonnull NSString*)key
                   withCallback:(RCTResponseSenderBlock)callback){
-    NMSSHSession* session = [NMSSHSession connectToHost:host
-                                                   port:port
-                                           withUsername:username];
-    if (session && session.isConnected) {
+    NMSSHSession* session = [[NMSSHSession alloc] initWithHost:host port:port andUsername:username];
+    if (!session) {
+        NSString* errorMsg = [NSString stringWithFormat:@"Failed to initialize session for host %@", host];
+        NSLog(@"%@", errorMsg);
+        NSDictionary* errorDict = @{
+            @"message": errorMsg,
+            @"errno": @(-2)
+        };
+        callback(@[errorDict]);
+        return;
+    }
+    
+    int connectResult = [session connect];
+    if (connectResult == 0 && session.isConnected) {
         dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        if ([passwordOrKey isKindOfClass:[NSString class]])
-            [session authenticateByPassword:passwordOrKey];
-        else
-            [session authenticateByInMemoryPublicKey:[passwordOrKey objectForKey:@"publicKey"] privateKey:[passwordOrKey objectForKey:@"privateKey"] andPassword:[passwordOrKey objectForKey:@"passphrase"]];
+            int authResult;
+            if ([passwordOrKey isKindOfClass:[NSString class]]) {
+                authResult = [session authenticateByPassword:passwordOrKey];
+            } else {
+                authResult = [session authenticateByInMemoryPublicKey:[passwordOrKey objectForKey:@"publicKey"] 
+                                                           privateKey:[passwordOrKey objectForKey:@"privateKey"] 
+                                                          andPassword:[passwordOrKey objectForKey:@"passphrase"]];
+            }
 
-            if (session.isAuthorized) {
+            if (authResult == 0 && session.isAuthorized) {
                 SSHClient* client = [[SSHClient alloc] init];
                 client._session = session;
                 client._key = key;
                 [[self clientPool] setObject:client forKey:key];
                 NSLog(@"Session connected");
                 callback(@[]);
-            }
-            else
-            {
-                NSLog(@"Authentication failed");
-                callback(@[[NSString stringWithFormat:@"Authentication to host %@ failed", host]]);
+            } else {
+                NSString* errorMsg = [NSString stringWithFormat:@"Authentication to host %@ failed with error code %d", host, authResult];
+                NSLog(@"%@", errorMsg);
+                NSDictionary* errorDict = @{
+                    @"message": errorMsg,
+                    @"errno": @(authResult)
+                };
+                callback(@[errorDict]);
             }
         });
     } else {
-      if (session) {
-        NSLog(@"Connection to host %@ failed", host);
-        callback(@[[NSString stringWithFormat:@"Connection to host %@ failed, with session", host]]);
-      } else {
-        NSLog(@"Connection to host %@ failed", host);
-        callback(@[[NSString stringWithFormat:@"Connection to host %@ failed, without session", host]]);
-      }
+        NSString* errorMsg = [NSString stringWithFormat:@"Connection to host %@ failed with error code %d", host, connectResult];
+        NSLog(@"%@", errorMsg);
+        NSDictionary* errorDict = @{
+            @"message": errorMsg,
+            @"errno": @(connectResult)
+        };
+        callback(@[errorDict]);
     }
 }
 

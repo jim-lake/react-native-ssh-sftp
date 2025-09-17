@@ -27,6 +27,22 @@ export var PtyType;
     PtyType["XTERM"] = "xterm";
 })(PtyType || (PtyType = {}));
 /**
+ * Creates an enhanced error object with errno if available
+ */
+function createSSHError(error) {
+    if (typeof error === 'object' && error !== null) {
+        if (error.message && typeof error.errno === 'number') {
+            const sshError = new Error(error.message);
+            sshError.errno = error.errno;
+            return sshError;
+        }
+    }
+    if (typeof error === 'string') {
+        return new Error(error);
+    }
+    return error;
+}
+/**
  * Represents an SSH client that can connect to a remote server and perform various operations.
  * Instances of SSHClient are created using the following factory functions:
  * - SSHClient.connect() - connects to host
@@ -280,7 +296,7 @@ export default class SSHClient {
      */
     connectToHost(callback) {
         RNSSHClient.connectToHost(this.host, this.port, this.username, this._key, (error) => {
-            callback(error);
+            callback(error ? createSSHError(error) : null);
         });
     }
     /**
@@ -305,14 +321,14 @@ export default class SSHClient {
             RNSSHClient.connectToHostByPassword(this.host, this.port, this.username, passwordOrKey, this._key, (error) => {
                 if (!error)
                     this._isAuthenticated = true;
-                callback(error);
+                callback(error ? createSSHError(error) : null);
             });
         }
         else {
             RNSSHClient.connectToHostByKey(this.host, this.port, this.username, passwordOrKey, this._key, (error) => {
                 if (!error)
                     this._isAuthenticated = true;
-                callback(error);
+                callback(error ? createSSHError(error) : null);
             });
         }
     }
@@ -326,14 +342,14 @@ export default class SSHClient {
             RNSSHClient.connectWithSignCallback(this.host, this.port, this.username, passwordOrKey.publicKey, this._key, (error) => {
                 if (!error)
                     this._isAuthenticated = true;
-                callback(error);
+                callback(error ? createSSHError(error) : null);
             });
         }
         else {
             RNSSHClient.connectToHostLegacy(this.host, this.port, this.username, passwordOrKey, this._key, (error) => {
                 if (!error)
                     this._isAuthenticated = true;
-                callback(error);
+                callback(error ? createSSHError(error) : null);
             });
         }
     }
@@ -348,10 +364,10 @@ export default class SSHClient {
         return new Promise((resolve, reject) => {
             RNSSHClient.authenticateWithPassword(password, this._key, (error) => {
                 if (callback) {
-                    callback(error);
+                    callback(error ? createSSHError(error) : null);
                 }
                 if (error) {
-                    return reject(error);
+                    return reject(createSSHError(error));
                 }
                 this._isAuthenticated = true;
                 resolve();
@@ -371,10 +387,10 @@ export default class SSHClient {
             const keyPair = { privateKey, passphrase };
             RNSSHClient.authenticateWithKey(keyPair, this._key, (error) => {
                 if (callback) {
-                    callback(error);
+                    callback(error ? createSSHError(error) : null);
                 }
                 if (error) {
-                    return reject(error);
+                    return reject(createSSHError(error));
                 }
                 this._isAuthenticated = true;
                 resolve();
@@ -396,10 +412,10 @@ export default class SSHClient {
             this.on('SignCallback', this.handleSignCallback.bind(this, signCallback));
             RNSSHClient.authenticateWithSignCallback(publicKey, this._key, (error) => {
                 if (callback) {
-                    callback(error);
+                    callback(error ? createSSHError(error) : null);
                 }
                 if (error) {
-                    return reject(error);
+                    return reject(createSSHError(error));
                 }
                 this._isAuthenticated = true;
                 resolve();

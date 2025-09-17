@@ -27,8 +27,10 @@ export default function App() {
       client.disconnect();
       Alert.alert('Success', 'Connected to Docker SSH server!');
     } catch (error) {
-      setStatus(`Docker SSH Failed: ${error.message}`);
-      Alert.alert('Error', `Failed to connect to Docker SSH: ${error.message}`);
+      const errorMsg = `Failed to connect to Docker SSH: ${error.message}`;
+      const errnoMsg = error.errno !== undefined ? ` (errno: ${error.errno})` : '';
+      setStatus(`Docker SSH Failed: ${error.message}${errnoMsg}`);
+      Alert.alert('Error', errorMsg + errnoMsg);
     }
   };
 

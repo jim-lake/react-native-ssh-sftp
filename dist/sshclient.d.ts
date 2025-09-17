@@ -11,6 +11,12 @@ export declare enum PtyType {
 }
 type CBError = any;
 /**
+ * Enhanced error type that includes errno from native layer
+ */
+export interface SSHError extends Error {
+    errno?: number;
+}
+/**
  * Represents a callback function with an optional response.
  * @template T The type of the response.
  * @param error The error object, if any.

@@ -187,7 +187,8 @@ gabzR7vGspCHltGME7l7mIe6l13ixn8dd8ils2j97NjMbafncDkQM/uwsZaXU/JU
       console.log('4. Base64 public key length:', publicKey.length);
       
       // Use the actual working private key from test environment
-      const privateKeyPem = `-----BEGIN RSA PRIVATE KEY-----
+      const privateKeyPem = `
+-----BEGIN RSA PRIVATE KEY-----
 MIIEowIBAAKCAQEAv17pUAUNprNrAPtECHuVz1nZhg6m+aAcwYzgxVEDyHRfXrUU
 ZRH0EA0uvmBmopT/xflhjFjdzr1hwU1cBF5MUsz3NKnxubKnankH/9Uk75DfiPfE
 lmCGihJL9CFXuXkwDK/GrQPIM198PVx6KrYOGnnmbc+bgYHd6tmHRvUYkZEzCeGB
@@ -213,78 +214,78 @@ hr9JBUdLIfNH6fYURRggHWb1A01jIckgBbb6N6eKWJQAonfrNqv/y2E/e9rNX8I0
 h+BchQKBgFkO4+5fL/7sB2EG9VBw1AaQwM2esO07Zv0emOYojXqVKShAL2xD7dw1
 HYI/V6f7UiJ+EL+LJUjkPYx0GLU1hO24xZlK3TjVzYLuEGxtRVLvT9hOx26s28cE
 gQT51sWj0C7S5tkmVWqRbuKLPLNTa4IW+Ls30yReijz95DWMHf0X
------END RSA PRIVATE KEY-----`;
+-----END RSA PRIVATE KEY-----
+`;
       
-      console.log('5. Private key PEM length:', privateKeyPem.length);
+      console.log('Private key PEM length:', privateKeyPem.length);
       
-      // Test private key parsing first
+      let testPrivateKey;
       try {
-        const testPrivateKey = forge.pki.privateKeyFromPem(privateKeyPem);
-        console.log('6. Private key parsed successfully');
-        console.log('7. Private key modulus length:', testPrivateKey.n.bitLength());
+        testPrivateKey = forge.pki.privateKeyFromPem(privateKeyPem);
+        console.log('Private key parsed successfully');
+        console.log('Private key modulus length:', testPrivateKey.n.bitLength());
+        console.log('Private key:', testPrivateKey);
       } catch (keyError) {
-        console.error('6. FAILED to parse private key:', keyError);
+        console.error('FAILED to parse private key:', keyError);
         throw keyError;
       }
       
       const signCallback = async (data) => {
         console.log('=== SIGN CALLBACK INVOKED ===');
-        console.log('9. Received data parameter:', typeof data, data);
-        console.log('10. Data length:', data ? data.length : 'null/undefined');
+        console.log('Received data parameter:', typeof data, data);
+        console.log('Data length:', data ? data.length : 'null/undefined');
         
         try {
           if (!data) {
-            console.error('11. ERROR: No data provided to sign callback');
+            console.error('ERROR: No data provided to sign callback');
             throw new Error('No data provided to sign callback');
           }
           
-          console.log('11. Attempting to decode base64 data...');
+          console.log('Attempting to decode base64 data...');
           const rawData = forge.util.decode64(data);
-          console.log('12. Raw data decoded successfully, length:', rawData.length);
-          console.log('13. Raw data (hex):', forge.util.bytesToHex(rawData));
-          
-          console.log('14. Parsing private key...');
-          const privateKey = forge.pki.privateKeyFromPem(privateKeyPem);
-          console.log('15. Private key parsed successfully in callback');
-          
-          console.log('16. Creating SHA1 hash...');
+          console.log('Raw data decoded successfully, length:', rawData.length);
+          console.log('Raw data (hex):', forge.util.bytesToHex(rawData));
+
+          console.log('Parsing private key...');
+
+          console.log('Creating SHA1 hash...');
           const md = forge.md.sha1.create();
           md.update(rawData);
           const hash = md.digest();
-          console.log('17. SHA1 hash created, length:', hash.length());
-          console.log('18. SHA1 hash (hex):', forge.util.bytesToHex(hash.data));
+          console.log('SHA1 hash created, length:', hash.length());
+          console.log('SHA1 hash (hex):', forge.util.bytesToHex(hash.data));
           
-          console.log('19. Signing hash with private key...');
+          console.log('Signing hash with private key...');
           const signature = privateKey.sign(hash);
-          console.log('20. Signature created, length:', signature.length);
-          console.log('21. Signature (hex):', forge.util.bytesToHex(signature));
+          console.log('Signature created, length:', signature.length);
+          console.log('Signature (hex):', forge.util.bytesToHex(signature));
           
-          console.log('22. Encoding signature as base64...');
+          console.log('Encoding signature as base64...');
           const signatureBase64 = forge.util.encode64(signature);
-          console.log('23. Signature base64 length:', signatureBase64.length);
-          console.log('24. Signature (base64):', signatureBase64);
+          console.log('Signature base64 length:', signatureBase64.length);
+          console.log('Signature (base64):', signatureBase64);
           
-          console.log('25. SIGN CALLBACK RETURNING SUCCESS');
+          console.log('SIGN CALLBACK RETURNING SUCCESS');
           return signatureBase64;
         } catch (error) {
-          console.error('26. SIGN CALLBACK ERROR:', error);
-          console.error('27. Error stack:', error.stack);
+          console.error('SIGN CALLBACK ERROR:', error);
+          console.error('Error stack:', error.stack);
           throw error;
         }
       };
       
-      console.log('28. Creating SSH client connection...');
-      const client = await SSHClient.connect('127.0.0.1', 2222, 'user');
-      console.log('29. SSH client connected successfully');
+      console.log('Creating SSH client connection...');
+      const client = await SSHClient.connect('100.64.2.122', 2222, 'user');
+      console.log('SSH client connected successfully');
       
-      console.log('30. Starting sign callback authentication...');
-      console.log('31. Passing public key data (base64):', publicKey);
+      console.log('Starting sign callback authentication...');
+      console.log('Passing public key data (base64):', publicKey);
       await client.authenticateWithSignCallback(publicKey, signCallback);
-      console.log('32. Sign callback authentication completed successfully');
+      console.log('Sign callback authentication completed successfully');
       
       setStatus('Sign Callback Connected!');
       client.disconnect();
-      console.log('33. SSH client disconnected');
+      console.log('SSH client disconnected');
       console.log('=== SIGN CALLBACK TEST COMPLETED SUCCESSFULLY ===');
       
     } catch (error) {

@@ -2582,7 +2582,7 @@ EXTERNAL SOURCES:
 
 CHECKOUT OPTIONS:
   NMSSH:
-    :commit: 7aea6966392cdbd2a47a8792355aed65fccd5791
+    :commit: 0441877688f51d9cae83dbbf6581732a08c20ec8
     :git: https://github.com/jim-lake/NMSSH.git
 
 SPEC CHECKSUMS:

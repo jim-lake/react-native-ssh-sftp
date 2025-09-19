@@ -170,14 +170,21 @@ gabzR7vGspCHltGME7l7mIe6l13ixn8dd8ils2j97NjMbafncDkQM/uwsZaXU/JU
   };
 
   const testSignCallback = async () => {
+    console.log('=== STARTING SIGN CALLBACK TEST ===');
     setStatus('Testing Sign Callback...');
+    
     try {
       // Use the actual working public key from test environment
       const publicKeySSH = `ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC/XulQBQ2ms2sA+0QIe5XPWdmGDqb5oBzBjODFUQPIdF9etRRlEfQQDS6+YGailP/F+WGMWN3OvWHBTVwEXkxSzPc0qfG5sqdqeQf/1STvkN+I98SWYIaKEkv0IVe5eTAMr8atA8gzX3w9XHoqtg4aeeZtz5uBgd3q2YdG9RiRkTMJ4YHT5TzQSFJy+FCuV4SP4SaU/Zv5Q/grZTsMcBal1tziu3xnuYH5vJmvFXXDPwUiJ6da+oUYf7D+wsqlL8/KDyiRPg2VX+E9rIoNe2J56MWjUoqoa/45Y7TaND8zN9fxTw6bgU9W9Yre5JpLaR9KtvoETe6lIprc5IV54PWx test-agent@nmssh`;
       
-      // Extract base64 part for NMSSH compatibility
+      console.log('1. Full SSH public key:', publicKeySSH);
+      
+      // Extract base64 part and decode it to get the actual SSH wire format data
       const parts = publicKeySSH.split(' ');
+      console.log('2. SSH key parts:', parts);
       const publicKey = parts[1];
+      console.log('3. Extracted base64 public key:', publicKey);
+      console.log('4. Base64 public key length:', publicKey.length);
       
       // Use the actual working private key from test environment
       const privateKeyPem = `-----BEGIN RSA PRIVATE KEY-----
@@ -208,26 +215,83 @@ HYI/V6f7UiJ+EL+LJUjkPYx0GLU1hO24xZlK3TjVzYLuEGxtRVLvT9hOx26s28cE
 gQT51sWj0C7S5tkmVWqRbuKLPLNTa4IW+Ls30yReijz95DWMHf0X
 -----END RSA PRIVATE KEY-----`;
       
+      console.log('5. Private key PEM length:', privateKeyPem.length);
+      
+      // Test private key parsing first
+      try {
+        const testPrivateKey = forge.pki.privateKeyFromPem(privateKeyPem);
+        console.log('6. Private key parsed successfully');
+        console.log('7. Private key modulus length:', testPrivateKey.n.bitLength());
+      } catch (keyError) {
+        console.error('6. FAILED to parse private key:', keyError);
+        throw keyError;
+      }
+      
       const signCallback = async (data) => {
+        console.log('=== SIGN CALLBACK INVOKED ===');
+        console.log('9. Received data parameter:', typeof data, data);
+        console.log('10. Data length:', data ? data.length : 'null/undefined');
+        
         try {
-          const privateKey = forge.pki.privateKeyFromPem(privateKeyPem);
+          if (!data) {
+            console.error('11. ERROR: No data provided to sign callback');
+            throw new Error('No data provided to sign callback');
+          }
+          
+          console.log('11. Attempting to decode base64 data...');
           const rawData = forge.util.decode64(data);
+          console.log('12. Raw data decoded successfully, length:', rawData.length);
+          console.log('13. Raw data (hex):', forge.util.bytesToHex(rawData));
           
-          // Sign raw data directly - NMSSH handles hashing internally
-          const signature = privateKey.sign(rawData);
+          console.log('14. Parsing private key...');
+          const privateKey = forge.pki.privateKeyFromPem(privateKeyPem);
+          console.log('15. Private key parsed successfully in callback');
           
-          return forge.util.encode64(signature);
+          console.log('16. Creating SHA1 hash...');
+          const md = forge.md.sha1.create();
+          md.update(rawData);
+          const hash = md.digest();
+          console.log('17. SHA1 hash created, length:', hash.length());
+          console.log('18. SHA1 hash (hex):', forge.util.bytesToHex(hash.data));
+          
+          console.log('19. Signing hash with private key...');
+          const signature = privateKey.sign(hash);
+          console.log('20. Signature created, length:', signature.length);
+          console.log('21. Signature (hex):', forge.util.bytesToHex(signature));
+          
+          console.log('22. Encoding signature as base64...');
+          const signatureBase64 = forge.util.encode64(signature);
+          console.log('23. Signature base64 length:', signatureBase64.length);
+          console.log('24. Signature (base64):', signatureBase64);
+          
+          console.log('25. SIGN CALLBACK RETURNING SUCCESS');
+          return signatureBase64;
         } catch (error) {
-          console.error('Sign callback error:', error);
+          console.error('26. SIGN CALLBACK ERROR:', error);
+          console.error('27. Error stack:', error.stack);
           throw error;
         }
       };
       
+      console.log('28. Creating SSH client connection...');
       const client = await SSHClient.connect('127.0.0.1', 2222, 'user');
+      console.log('29. SSH client connected successfully');
+      
+      console.log('30. Starting sign callback authentication...');
+      console.log('31. Passing public key data (base64):', publicKey);
       await client.authenticateWithSignCallback(publicKey, signCallback);
+      console.log('32. Sign callback authentication completed successfully');
+      
       setStatus('Sign Callback Connected!');
       client.disconnect();
+      console.log('33. SSH client disconnected');
+      console.log('=== SIGN CALLBACK TEST COMPLETED SUCCESSFULLY ===');
+      
     } catch (error) {
+      console.error('=== SIGN CALLBACK TEST FAILED ===');
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+      console.error('Error object:', error);
       setStatus(`Sign Callback Failed: ${error.message}`);
     }
   };

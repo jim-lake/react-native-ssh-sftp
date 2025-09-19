@@ -54,8 +54,7 @@ describe('SSH SFTP Authentication Methods Tests', () => {
   it('should test sign callback authentication', async () => {
     await element(by.id('sign-callback-button')).tap();
     await new Promise(resolve => setTimeout(resolve, 6800));
-    // Check that sign callback authentication failed as expected (mock implementation)
-    await detoxExpected(element(by.id('status'))).toHaveText('Status: Sign Callback Failed: Sign callback authentication failed with error code -19');
+    await detoxExpected(element(by.id('status'))).toHaveText('Status: Sign Callback Connected!');
   });
 
   it('should test basic SSH functionality', async () => {

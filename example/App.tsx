@@ -28,7 +28,7 @@ emitter.addListener('SignCallback', (event) => {
 // this is because event emitter don't work right in this example because voodoo
 SSHClient.setClient(RNSSHClient, emitter);
 
-const HOST = '100.64.2.122';
+const HOST = '127.0.0.1';
 const PORT = 2222;
 
 export default function App() {

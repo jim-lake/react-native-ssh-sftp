@@ -1,3 +1,6 @@
+import { NativeEventEmitter } from 'react-native';
+declare let RNSSHClient: any;
+declare let RNSSHClientEmitter: NativeEventEmitter;
 /**
  * Represents the types of PTY (pseudo-terminal) for SSH connections.
  */
@@ -27,7 +30,7 @@ export type CallbackFunction<T> = (error: CBError, response?: T) => void;
  * Represents an event handler function.
  * @param value - The value passed to the event handler.
  */
-export type EventHandler = (value: any) => void;
+export type EventHandler = (value: any, event: any) => void;
 /**
  * Represents the result of a directory listing operation.
  */
@@ -92,6 +95,7 @@ export default class SSHClient {
      * @param key - The SSH private key as a string.
      * @returns A Promise that resolves to the details of the key, including its type and size.
      */
+    static setClient(new_client: typeof RNSSHClient, new_emitter: typeof RNSSHClientEmitter): void;
     static getKeyDetails(key: string): Promise<{
         keyType: string;
         keySize: number;

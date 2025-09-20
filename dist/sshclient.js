@@ -7,13 +7,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
-import { Platform, NativeModules, NativeEventEmitter, DeviceEventEmitter, } from 'react-native';
-const { RNSSHClient } = NativeModules;
-const RNSSHClientEmitter = new NativeEventEmitter(RNSSHClient);
+import { Platform, NativeModules, NativeEventEmitter, } from 'react-native';
 const NATIVE_EVENT_SHELL = 'Shell';
 const NATIVE_EVENT_DOWNLOAD_PROGRESS = 'DownloadProgress';
 const NATIVE_EVENT_UPLOAD_PROGRESS = 'UploadProgress';
 const NATIVE_EVENT_SIGN_CALLBACK = 'SignCallback';
+let RNSSHClient = NativeModules.RNSSHClient;
+let RNSSHClientEmitter = new NativeEventEmitter(RNSSHClient);
 /**
  * Represents the types of PTY (pseudo-terminal) for SSH connections.
  */
@@ -60,13 +60,14 @@ export default class SSHClient {
      * @param key - The SSH private key as a string.
      * @returns A Promise that resolves to the details of the key, including its type and size.
      */
+    static setClient(new_client, new_emitter) {
+        RNSSHClient = new_client;
+        RNSSHClientEmitter = new_emitter;
+    }
     static getKeyDetails(key) {
         return new Promise((resolve, reject) => {
             RNSSHClient.getKeyDetails(key)
                 .then((result) => {
-                /* eslint-disable no-console */
-                console.log(result);
-                /* eslint-enable no-console */
                 resolve({ keyType: result.keyType, keySize: result.keySize || 0 });
             })
                 .catch((error) => {
@@ -238,7 +239,7 @@ export default class SSHClient {
      */
     handleEvent(event) {
         if (this._handlers[event.name] && this._key === event.key) {
-            this._handlers[event.name](event.value);
+            this._handlers[event.name](event.value, event);
         }
     }
     /**
@@ -256,8 +257,7 @@ export default class SSHClient {
      * @param eventName - The name of the event to listen for.
      */
     registerNativeListener(eventName) {
-        const listenerInterface = Platform.OS === 'ios' ? RNSSHClientEmitter : DeviceEventEmitter;
-        this._listeners[eventName] = listenerInterface.addListener(eventName, this.handleEvent.bind(this));
+        this._listeners[eventName] = RNSSHClientEmitter.addListener(eventName, this.handleEvent.bind(this));
     }
     /**
      * Unregisters a native listener for the specified event name.
@@ -276,16 +276,14 @@ export default class SSHClient {
      * @param signCallback - The sign callback function to use.
      * @param event - The sign callback event from native.
      */
-    handleSignCallback(signCallback, event) {
+    handleSignCallback(signCallback, _value, event) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
                 const signature = yield signCallback(event.data);
                 RNSSHClient.provideSignature(event.requestId, signature);
             }
-            catch (error) {
-                // eslint-disable-next-line no-console
-                console.error('Sign callback failed:', error);
-                RNSSHClient.provideSignature(event.requestId, ''); // Provide empty signature on error
+            catch (_a) {
+                RNSSHClient.provideSignature(event.requestId, '');
             }
         });
     }

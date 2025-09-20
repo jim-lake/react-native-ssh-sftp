@@ -2,18 +2,16 @@ import {
   Platform,
   NativeModules,
   NativeEventEmitter,
-  DeviceEventEmitter,
   EmitterSubscription,
 } from 'react-native';
-
-const { RNSSHClient } = NativeModules;
-
-const RNSSHClientEmitter = new NativeEventEmitter(RNSSHClient);
 
 const NATIVE_EVENT_SHELL = 'Shell';
 const NATIVE_EVENT_DOWNLOAD_PROGRESS = 'DownloadProgress';
 const NATIVE_EVENT_UPLOAD_PROGRESS = 'UploadProgress';
 const NATIVE_EVENT_SIGN_CALLBACK = 'SignCallback';
+
+let RNSSHClient = NativeModules.RNSSHClient;
+let RNSSHClientEmitter = new NativeEventEmitter(RNSSHClient);
 
 interface NativeEvent {
   name: string;
@@ -73,7 +71,7 @@ export type CallbackFunction<T> = (error: CBError, response?: T) => void;
  * Represents an event handler function.
  * @param value - The value passed to the event handler.
  */
-export type EventHandler = (value: any) => void; // eslint-disable-line @typescript-eslint/no-explicit-any
+export type EventHandler = (value: any, event: any) => void; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 /**
  * Represents the result of a directory listing operation.
@@ -146,15 +144,20 @@ export default class SSHClient {
    * @param key - The SSH private key as a string.
    * @returns A Promise that resolves to the details of the key, including its type and size.
    */
+  static setClient(
+    new_client: typeof RNSSHClient,
+    new_emitter: typeof RNSSHClientEmitter
+  ) {
+    RNSSHClient = new_client;
+    RNSSHClientEmitter = new_emitter;
+  }
+
   static getKeyDetails(
     key: string
   ): Promise<{ keyType: string; keySize: number }> {
     return new Promise((resolve, reject) => {
       RNSSHClient.getKeyDetails(key)
         .then((result: keyDetail) => {
-          /* eslint-disable no-console */
-          console.log(result);
-          /* eslint-enable no-console */
           resolve({ keyType: result.keyType, keySize: result.keySize || 0 });
         })
         .catch((error: CBError) => {
@@ -440,7 +443,7 @@ export default class SSHClient {
    */
   private handleEvent(event: NativeEvent): void {
     if (this._handlers[event.name] && this._key === event.key) {
-      this._handlers[event.name](event.value);
+      this._handlers[event.name](event.value, event);
     }
   }
 
@@ -460,9 +463,7 @@ export default class SSHClient {
    * @param eventName - The name of the event to listen for.
    */
   private registerNativeListener(eventName: string): void {
-    const listenerInterface =
-      Platform.OS === 'ios' ? RNSSHClientEmitter : DeviceEventEmitter;
-    this._listeners[eventName] = listenerInterface.addListener(
+    this._listeners[eventName] = RNSSHClientEmitter.addListener(
       eventName,
       this.handleEvent.bind(this)
     );
@@ -488,15 +489,14 @@ export default class SSHClient {
    */
   private async handleSignCallback(
     signCallback: SignCallback,
+    _value: unknown,
     event: SignCallbackEvent
   ): Promise<void> {
     try {
       const signature = await signCallback(event.data);
       RNSSHClient.provideSignature(event.requestId, signature);
-    } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error('Sign callback failed:', error);
-      RNSSHClient.provideSignature(event.requestId, ''); // Provide empty signature on error
+    } catch {
+      RNSSHClient.provideSignature(event.requestId, '');
     }
   }
 
@@ -654,22 +654,18 @@ export default class SSHClient {
   ): Promise<void> {
     return new Promise((resolve, reject) => {
       const keyPair: KeyPair = { privateKey, passphrase };
-      RNSSHClient.authenticateWithKey(
-        keyPair,
-        this._key,
-        (error: CBError) => {
-          if (callback) {
-            callback(error ? createSSHError(error) : null);
-          }
-
-          if (error) {
-            return reject(createSSHError(error));
-          }
-
-          this._isAuthenticated = true;
-          resolve();
+      RNSSHClient.authenticateWithKey(keyPair, this._key, (error: CBError) => {
+        if (callback) {
+          callback(error ? createSSHError(error) : null);
         }
-      );
+
+        if (error) {
+          return reject(createSSHError(error));
+        }
+
+        this._isAuthenticated = true;
+        resolve();
+      });
     });
   }
 
@@ -952,11 +948,11 @@ export default class SSHClient {
             (error: CBError, _response: string[]) => {
               const response = _response
                 ? _response.map((p) => {
-                  // eslint-disable-next-line no-control-regex -- Control characters are removed from the response, because they can make JSON.parse fail
-                  return JSON.parse(
-                    p.replace(/[\u0000-\u001F]/g, '')
-                  ) as LsResult;
-                })
+                    // eslint-disable-next-line no-control-regex -- Control characters are removed from the response, because they can make JSON.parse fail
+                    return JSON.parse(
+                      p.replace(/[\u0000-\u001F]/g, '')
+                    ) as LsResult;
+                  })
                 : undefined;
 
               if (callback) {

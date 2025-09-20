@@ -3,13 +3,41 @@ import {View, Text, StyleSheet, Alert, TouchableOpacity, ScrollView} from 'react
 import SSHClient from 'react-native-ssh-sftp';
 import forge from 'node-forge';
 
+import {
+  Platform,
+  NativeModules,
+  NativeEventEmitter,
+  DeviceEventEmitter,
+  EmitterSubscription,
+} from 'react-native';
+
+const NATIVE_EVENT_SHELL = 'Shell';
+const NATIVE_EVENT_DOWNLOAD_PROGRESS = 'DownloadProgress';
+const NATIVE_EVENT_UPLOAD_PROGRESS = 'UploadProgress';
+const NATIVE_EVENT_SIGN_CALLBACK = 'SignCallback';
+
+
+const RNSSHClient = NativeModules.RNSSHClient;
+
+const emitter = new NativeEventEmitter(RNSSHClient);
+
+emitter.addListener('SignCallback', (event) => {
+  console.log("App.SignCallback:", event);
+});
+
+// this is because event emitter don't work right in this example because voodoo
+SSHClient.setClient(RNSSHClient, emitter);
+
+const HOST = '100.64.2.122';
+const PORT = 2222;
+
 export default function App() {
   const [status, setStatus] = useState('Ready');
 
   const testConnection = async () => {
     setStatus('Testing...');
     try {
-      const client = await SSHClient.connect('127.0.0.1', 22, 'test');
+      const client = await SSHClient.connect(HOST, PORT, 'test');
       await client.authenticateWithPassword('test');
       setStatus('Connected');
       client.disconnect();
@@ -22,7 +50,7 @@ export default function App() {
   const testDockerConnection = async () => {
     setStatus('Testing Docker SSH...');
     try {
-      const client = await SSHClient.connect('127.0.0.1', 2222, 'user');
+      const client = await SSHClient.connect(HOST, PORT, 'user');
       await client.authenticateWithPassword('password');
       setStatus('Docker SSH Connected!');
       client.disconnect();
@@ -65,7 +93,7 @@ h+BchQKBgFkO4+5fL/7sB2EG9VBw1AaQwM2esO07Zv0emOYojXqVKShAL2xD7dw1
 HYI/V6f7UiJ+EL+LJUjkPYx0GLU1hO24xZlK3TjVzYLuEGxtRVLvT9hOx26s28cE
 gQT51sWj0C7S5tkmVWqRbuKLPLNTa4IW+Ls30yReijz95DWMHf0X
 -----END RSA PRIVATE KEY-----`;
-      const client = await SSHClient.connect('127.0.0.1', 2222, 'user');
+      const client = await SSHClient.connect(HOST, PORT, 'user');
       await client.authenticateWithKey(privateKey);
       setStatus('RSA Key Connected!');
       client.disconnect();
@@ -104,7 +132,7 @@ h+BchQKBgFkO4+5fL/7sB2EG9VBw1AaQwM2esO07Zv0emOYojXqVKShAL2xD7dw1
 HYI/V6f7UiJ+EL+LJUjkPYx0GLU1hO24xZlK3TjVzYLuEGxtRVLvT9hOx26s28cE
 gQT51sWj0C7S5tkmVWqRbuKLPLNTa4IW+Ls30yReijz95DWMHf0X
 -----END RSA PRIVATE KEY-----`;
-      const client = await SSHClient.connect('127.0.0.1', 2222, 'user');
+      const client = await SSHClient.connect(HOST, PORT, 'user');
       await client.authenticateWithKey(privateKey);
       setStatus('OpenSSH Key Connected!');
       client.disconnect();
@@ -116,7 +144,7 @@ gQT51sWj0C7S5tkmVWqRbuKLPLNTa4IW+Ls30yReijz95DWMHf0X
   const testSFTP = async () => {
     setStatus('Testing SFTP...');
     try {
-      const client = await SSHClient.connect('127.0.0.1', 2222, 'user');
+      const client = await SSHClient.connect(HOST, PORT, 'user');
       await client.authenticateWithPassword('password');
       await client.connectSFTP();
       const files = await client.sftpLs('.');
@@ -160,7 +188,7 @@ WhwVl1ZKPijqaeYm+UlGIYVjdkKmJb7XAFzeP2jgfUZ8HYA+VlUsPEMcqR5AL6mu
 D6/OHAfwShJpHro4mwSo/Gptr31nANMR5y++l9u2SS4PIwVGvlPQbtw+V2mga1Cz
 gabzR7vGspCHltGME7l7mIe6l13ixn8dd8ils2j97NjMbafncDkQM/uwsZaXU/JU
 -----END RSA PRIVATE KEY-----`;
-      const client = await SSHClient.connect('127.0.0.1', 2222, 'user');
+      const client = await SSHClient.connect(HOST, PORT, 'user');
       await client.authenticateWithKey(privateKey, 'password');
       setStatus('Encrypted RSA Key Connected!');
       client.disconnect();
@@ -224,7 +252,7 @@ gQT51sWj0C7S5tkmVWqRbuKLPLNTa4IW+Ls30yReijz95DWMHf0X
         testPrivateKey = forge.pki.privateKeyFromPem(privateKeyPem);
         console.log('Private key parsed successfully');
         console.log('Private key modulus length:', testPrivateKey.n.bitLength());
-        console.log('Private key:', testPrivateKey);
+        //console.log('Private key:', testPrivateKey);
       } catch (keyError) {
         console.error('FAILED to parse private key:', keyError);
         throw keyError;
@@ -256,7 +284,7 @@ gQT51sWj0C7S5tkmVWqRbuKLPLNTa4IW+Ls30yReijz95DWMHf0X
           console.log('SHA1 hash (hex):', forge.util.bytesToHex(hash.data));
           
           console.log('Signing hash with private key...');
-          const signature = privateKey.sign(hash);
+          const signature = testPrivateKey.sign(md);
           console.log('Signature created, length:', signature.length);
           console.log('Signature (hex):', forge.util.bytesToHex(signature));
           
@@ -275,7 +303,7 @@ gQT51sWj0C7S5tkmVWqRbuKLPLNTa4IW+Ls30yReijz95DWMHf0X
       };
       
       console.log('Creating SSH client connection...');
-      const client = await SSHClient.connect('100.64.2.122', 2222, 'user');
+      const client = await SSHClient.connect(HOST, PORT, 'user');
       console.log('SSH client connected successfully');
       
       console.log('Starting sign callback authentication...');
@@ -300,7 +328,7 @@ gQT51sWj0C7S5tkmVWqRbuKLPLNTa4IW+Ls30yReijz95DWMHf0X
   const testBadPassword = async () => {
     setStatus('Testing Bad Password...');
     try {
-      const client = await SSHClient.connect('127.0.0.1', 2222, 'user');
+      const client = await SSHClient.connect(HOST, PORT, 'user');
       await client.authenticateWithPassword('wrongpassword');
       setStatus('Bad Password: Unexpected Success!');
     } catch (error) {
@@ -340,7 +368,7 @@ fWnOX+hvHMPPa0SqZdgEp5+LQSKIgdne9/iw16Xw18aMMMps7VBkFqLgQywCyqocVpUlRj
 ZHp4MIrucCp598RYJcEsSTUMlWsHs2ffnuZphPpcAk5kq/NPEcSVa08G+xB7mhlPIPAlam
 xpWXeGkW2vnB3XpTAAAAFXVuYXV0aG9yaXplZEB0ZXN0LmNvbQECAwQF
 -----END OPENSSH PRIVATE KEY-----`;
-      const client = await SSHClient.connect('127.0.0.1', 2222, 'user');
+      const client = await SSHClient.connect(HOST, PORT, 'user');
       await client.authenticateWithKey(badPrivateKey);
       setStatus('Bad RSA Key: Unexpected Success!');
     } catch (error) {

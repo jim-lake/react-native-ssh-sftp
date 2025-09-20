@@ -1,6 +1,6 @@
 {
   "name": "react-native-ssh-sftp",
-  "version": "1.5.23",
+  "version": "1.5.24",
   "description": "SSH and SFTP client library for React Native",
   "main": "dist/sshclient.js",
   "types": "dist/sshclient.d.ts",
@@ -10,7 +10,8 @@
     "precompile": "npm run lint:build",
     "compile": "tsc",
     "lint": "eslint src",
-    "lint:build": "cross-env NODE_ENV=production npm run lint -- --max-warnings 20"
+    "lint:build": "cross-env NODE_ENV=production npm run lint -- --max-warnings 20",
+    "pretty": "prettier --write src/*"
   },
   "keywords": [
     "react-native",

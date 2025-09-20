@@ -7,10 +7,16 @@
     NSMutableDictionary* _pendingSignRequests;
 }
 
-RCT_EXPORT_MODULE();
+RCT_EXPORT_MODULE(RNSSHClient);
 
-- (dispatch_queue_t)methodQueue
-{
+- (instancetype)init {
+    if (self = [super init]) {
+        NSLog(@"RNSSHClient initialized: %@", self);
+    }
+    return self;
+}
+
+- (dispatch_queue_t)methodQueue {
     return dispatch_queue_create("reactnative.sshclient", DISPATCH_QUEUE_SERIAL);
 }
 
@@ -101,6 +107,7 @@ RCT_EXPORT_METHOD(connectWithSignCallback:(NSString *)host
                 dispatch_async(dispatch_get_main_queue(), ^{
                     [self sendEventWithName:@"SignCallback" body:@{
                         @"key": key,
+                        @"name": @"SignCallback",
                         @"requestId": requestId,
                         @"data": dataString
                     }];
@@ -268,8 +275,7 @@ RCT_EXPORT_METHOD(authenticateWithSignCallback:(NSString *)publicKey
     SSHClient* client = [self clientForKey:key];
     if (client && client._session && client._session.isConnected) {
         dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-            NSData *publicKeyData = [publicKey dataUsingEncoding:NSUTF8StringEncoding];
-            
+            NSData *publicKeyData = [[NSData alloc] initWithBase64EncodedString:publicKey options:0];
             int authResult = [client._session authenticateByInMemoryPublicKey:publicKeyData
                                                             signCallback:^int(NSData * _Nonnull data, NSData * _Nullable * _Nonnull signature) {
                 // Convert NSData to base64 string for JS callback
@@ -289,6 +295,7 @@ RCT_EXPORT_METHOD(authenticateWithSignCallback:(NSString *)publicKey
                 dispatch_async(dispatch_get_main_queue(), ^{
                     [self sendEventWithName:@"SignCallback" body:@{
                         @"key": key,
+                        @"name": @"SignCallback",
                         @"requestId": requestId,
                         @"data": dataString
                     }];

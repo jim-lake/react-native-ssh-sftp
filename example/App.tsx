@@ -1,5 +1,12 @@
-import React, {useState} from 'react';
-import {View, Text, StyleSheet, Alert, TouchableOpacity, ScrollView} from 'react-native';
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Alert,
+  TouchableOpacity,
+  ScrollView,
+} from 'react-native';
 import SSHClient from 'react-native-ssh-sftp';
 import forge from 'node-forge';
 
@@ -16,13 +23,12 @@ const NATIVE_EVENT_DOWNLOAD_PROGRESS = 'DownloadProgress';
 const NATIVE_EVENT_UPLOAD_PROGRESS = 'UploadProgress';
 const NATIVE_EVENT_SIGN_CALLBACK = 'SignCallback';
 
-
 const RNSSHClient = NativeModules.RNSSHClient;
 
 const emitter = new NativeEventEmitter(RNSSHClient);
 
-emitter.addListener('SignCallback', (event) => {
-  console.log("App.SignCallback:", event);
+emitter.addListener('SignCallback', event => {
+  console.log('App.SignCallback:', event);
 });
 
 // this is because event emitter don't work right in this example because voodoo
@@ -57,7 +63,8 @@ export default function App() {
       Alert.alert('Success', 'Connected to Docker SSH server!');
     } catch (error) {
       const errorMsg = `Failed to connect to Docker SSH: ${error.message}`;
-      const errnoMsg = error.errno !== undefined ? ` (errno: ${error.errno})` : '';
+      const errnoMsg =
+        error.errno !== undefined ? ` (errno: ${error.errno})` : '';
       setStatus(`Docker SSH Failed: ${error.message}${errnoMsg}`);
       Alert.alert('Error', errorMsg + errnoMsg);
     }
@@ -198,22 +205,22 @@ gabzR7vGspCHltGME7l7mIe6l13ixn8dd8ils2j97NjMbafncDkQM/uwsZaXU/JU
   };
 
   const testSignCallback = async () => {
-    console.log('=== STARTING SIGN CALLBACK TEST ===');
-    setStatus('Testing Sign Callback...');
-    
+    console.log('=== STARTING RSA 2048 SIGN CALLBACK TEST ===');
+    setStatus('Testing RSA 2048 Sign Callback...');
+
     try {
       // Use the actual working public key from test environment
       const publicKeySSH = `ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC/XulQBQ2ms2sA+0QIe5XPWdmGDqb5oBzBjODFUQPIdF9etRRlEfQQDS6+YGailP/F+WGMWN3OvWHBTVwEXkxSzPc0qfG5sqdqeQf/1STvkN+I98SWYIaKEkv0IVe5eTAMr8atA8gzX3w9XHoqtg4aeeZtz5uBgd3q2YdG9RiRkTMJ4YHT5TzQSFJy+FCuV4SP4SaU/Zv5Q/grZTsMcBal1tziu3xnuYH5vJmvFXXDPwUiJ6da+oUYf7D+wsqlL8/KDyiRPg2VX+E9rIoNe2J56MWjUoqoa/45Y7TaND8zN9fxTw6bgU9W9Yre5JpLaR9KtvoETe6lIprc5IV54PWx test-agent@nmssh`;
-      
+
       console.log('1. Full SSH public key:', publicKeySSH);
-      
+
       // Extract base64 part and decode it to get the actual SSH wire format data
       const parts = publicKeySSH.split(' ');
       console.log('2. SSH key parts:', parts);
       const publicKey = parts[1];
       console.log('3. Extracted base64 public key:', publicKey);
       console.log('4. Base64 public key length:', publicKey.length);
-      
+
       // Use the actual working private key from test environment
       const privateKeyPem = `
 -----BEGIN RSA PRIVATE KEY-----
@@ -244,31 +251,34 @@ HYI/V6f7UiJ+EL+LJUjkPYx0GLU1hO24xZlK3TjVzYLuEGxtRVLvT9hOx26s28cE
 gQT51sWj0C7S5tkmVWqRbuKLPLNTa4IW+Ls30yReijz95DWMHf0X
 -----END RSA PRIVATE KEY-----
 `;
-      
+
       console.log('Private key PEM length:', privateKeyPem.length);
-      
+
       let testPrivateKey;
       try {
         testPrivateKey = forge.pki.privateKeyFromPem(privateKeyPem);
         console.log('Private key parsed successfully');
-        console.log('Private key modulus length:', testPrivateKey.n.bitLength());
+        console.log(
+          'Private key modulus length:',
+          testPrivateKey.n.bitLength(),
+        );
         //console.log('Private key:', testPrivateKey);
       } catch (keyError) {
         console.error('FAILED to parse private key:', keyError);
         throw keyError;
       }
-      
-      const signCallback = async (data) => {
+
+      const signCallback = async data => {
         console.log('=== SIGN CALLBACK INVOKED ===');
         console.log('Received data parameter:', typeof data, data);
         console.log('Data length:', data ? data.length : 'null/undefined');
-        
+
         try {
           if (!data) {
             console.error('ERROR: No data provided to sign callback');
             throw new Error('No data provided to sign callback');
           }
-          
+
           console.log('Attempting to decode base64 data...');
           const rawData = forge.util.decode64(data);
           console.log('Raw data decoded successfully, length:', rawData.length);
@@ -282,17 +292,17 @@ gQT51sWj0C7S5tkmVWqRbuKLPLNTa4IW+Ls30yReijz95DWMHf0X
           const hash = md.digest();
           console.log('SHA1 hash created, length:', hash.length());
           console.log('SHA1 hash (hex):', forge.util.bytesToHex(hash.data));
-          
+
           console.log('Signing hash with private key...');
           const signature = testPrivateKey.sign(md);
           console.log('Signature created, length:', signature.length);
           console.log('Signature (hex):', forge.util.bytesToHex(signature));
-          
+
           console.log('Encoding signature as base64...');
           const signatureBase64 = forge.util.encode64(signature);
           console.log('Signature base64 length:', signatureBase64.length);
           console.log('Signature (base64):', signatureBase64);
-          
+
           console.log('SIGN CALLBACK RETURNING SUCCESS');
           return signatureBase64;
         } catch (error) {
@@ -301,27 +311,164 @@ gQT51sWj0C7S5tkmVWqRbuKLPLNTa4IW+Ls30yReijz95DWMHf0X
           throw error;
         }
       };
-      
+
       console.log('Creating SSH client connection...');
       const client = await SSHClient.connect(HOST, PORT, 'user');
       console.log('SSH client connected successfully');
-      
+
       console.log('Starting sign callback authentication...');
       console.log('Passing public key data (base64):', publicKey);
       await client.authenticateWithSignCallback(publicKey, signCallback);
       console.log('Sign callback authentication completed successfully');
-      
-      setStatus('Sign Callback Connected!');
+
+      setStatus('RSA 2048 Sign Callback Connected!');
       client.disconnect();
       console.log('SSH client disconnected');
-      console.log('=== SIGN CALLBACK TEST COMPLETED SUCCESSFULLY ===');
-      
+      console.log('=== RSA 2048 SIGN CALLBACK TEST COMPLETED SUCCESSFULLY ===');
     } catch (error) {
       console.error('=== SIGN CALLBACK TEST FAILED ===');
       console.error('Error message:', error.message);
       console.error('Error stack:', error.stack);
       console.error('Error object:', error);
-      setStatus(`Sign Callback Failed: ${error.message}`);
+      setStatus(`RSA 2048 Sign Callback Failed: ${error.message}`);
+    }
+  };
+
+  const testRSA4096SignCallback = async () => {
+    setStatus('Testing RSA 4096 Sign Callback...');
+    try {
+      const publicKeySSH = `ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDTyI5YhfguzP/8xS9DAWxXR511JGjXzfySlryiZVq0Tk5iYKwjg14kXZEWnIAf2p7e2PASKp1TclNwBTsuqQzKbZFYOW+RQZP56FD0nqdohvaQpdAuo5CSARVztHo6b22T/zMYxxg57rKf7O4X4FoET6/YH2GgK6ydGjDZxzUEPPxK5DJfs76SXfmA9t6uFF2HMSs0BsW6IgzMKZoi6WQkiiFkWgQkkvE5lSRe7w3nnJvRdKvRBqNzJtyNj4MeUVnzSCJ77nsEvZZ6+OGx7GQ/P9MUi+MKsEIn5KmtEPtKg/QaA/XLddNQ5/y1DuGHqi9ZpY562xZEe31xzewx7fWLmxE9Jwc5cXOaPbg/ENskRVnEMKvCfGnXIeFaeHrredgBwOqdLbnadNVn/C8yGylACaRrIuDBKeLAGfTNxlguHzqHzsXmlciV5PtEaVKnRUkaq5eykyJIpQKlE/SrssnTpgnoNPEM0cFyEjUqqGrdXtMAnVA2YXeIlNLhiaRsr8Ws0Y0PKqJp0lE2idCoZndBbrSpYi+UN5trstH3ihKfXOu0vTRPK1OOMlnG1jHzmcqpkEUWwp+HgyOu7jQJqHWDyMjwKmNqYHxmiQNI+16kQzaIBAinsSvYjw5jIvbCXfbBaBP0+HCFKhnyYUuvGYxYWn6LNeevuYRHto/QOekOeQ== test-rsa4096@nmssh`;
+      const publicKey = publicKeySSH.split(' ')[1];
+
+      const privateKeyPem = `-----BEGIN RSA PRIVATE KEY-----
+MIIJKQIBAAKCAgEA08iOWIX4Lsz//MUvQwFsV0eddSRo1838kpa8omVatE5OYmCs
+I4NeJF2RFpyAH9qe3tjwEiqdU3JTcAU7LqkMym2RWDlvkUGT+ehQ9J6naIb2kKXQ
+LqOQkgEVc7R6Om9tk/8zGMcYOe6yn+zuF+BaBE+v2B9hoCusnRow2cc1BDz8SuQy
+X7O+kl35gPberhRdhzErNAbFuiIMzCmaIulkJIohZFoEJJLxOZUkXu8N55yb0XSr
+0QajcybcjY+DHlFZ80gie+57BL2WevjhsexkPz/TFIvjCrBCJ+SprRD7SoP0GgP1
+y3XTUOf8tQ7hh6ovWaWOetsWRHt9cc3sMe31i5sRPScHOXFzmj24PxDbJEVZxDCr
+wnxp1yHhWnh663nYAcDqnS252nTVZ/wvMhspQAmkayLgwSniwBn0zcZYLh86h87F
+5pXIleT7RGlSp0VJGquXspMiSKUCpRP0q7LJ06YJ6DTxDNHBchI1Kqhq3V7TAJ1Q
+NmF3iJTS4YmkbK/FrNGNDyqiadJRNonQqGZ3QW60qWIvlDeba7LR94oSn1zrtL00
+TytTjjJZxtYx85nKqZBFFsKfh4Mjru40Cah1g8jI8CpjamB8ZokDSPtepEM2iAQI
+p7Er2I8OYyL2wl32wWgT9PhwhSoZ8mFLrxmMWFp+izXnr7mER7aP0DnpDnkCAwEA
+AQKCAgEAw52+DXpBEUl9MYcY7nVEEyItCGSHCr5TCzt8JSwlKeIieK/+kBbpQAHE
+3/PSTJnsoL4UkVMXWlqBQzkxvxmanOezlqAGs061VeIF1M0uqFfxKw5dSpb+FD44
+CFWtiIgf2NGh6sMLV4dpKlr4WMl7m/vW2nOyAvYUTFBCywU7rRx/lNVOyiMGZb+z
+lDFy4awh75u04itXO2P0GihbHOAjBbUovr5+kSHA+oUNwTphx4taSY/QnBPbqaM9
+mOv0Gm7d/N6mK37N1kUf15pHLcbBmcJkP9gt8FN558tIBnlnAx76u4To5fOBKnv9
+aWfDXUIO1mkbP9NZsAu4hQPFpSC86XTPU4MYCcdXZeE4PlzQ9BdakXZ4WGWlAG/v
+9Uu78R/QnOFxizSOhHMCqRNQRp4fXeZAjhU+khKHszKkmlraFm90p6JdZVyURXdb
+Ya/dOyRnxNRHJP/10atn1pDd2lDAu+DitqYEczuhw56l1y4X2HndbC3LXZzxLAbK
+TRCnDu62WhvAAhu+16Wnd/Y7uXkCYcLgHjCFqVooAx3mCnHX2pbxnx7fGAy7+tWT
+DmbynGIvl+PXYo1B6aJyXPhoJfQUllDvvrA+Ygthhbch5VMbFfn2yPK6d+Pctbl6
+F+WnAmoyu+NM7BSWs/LdkxmhsbQsY9MjeQm/ExAmGHOacdJPvHkCggEBAPyn6O07
+1BmZnZDeASo0c/85QZLdI5w8c83v4aKdPO069vU1B26hmjw+Jqo96BcZ1X1mjMje
+mGoj9/DV8Zz2mQffDi+/9sPTpuWB4W3gfhsImtd57b7DKgEPKxrid+grm110bK9p
+Sq8EmceBKaVY6lZabVRxlE+C+h18UDW8ILurx05MG5t15mFsM91CK+BuzQ5W5i/G
+xLcYSUbCMvKppuEVkC3NRyu/76DklfdNq6fComlgj4xK1Bcg4iwIgxn7Vq8WE5jN
+sjmlLIuGIKQSaeWjYm4lVN6pLDj5z+qnJfzVckEKmaa6MwfOY+EOrYh7TMsoOTrD
+/niydrid0D2If0cCggEBANaWJ8S4UbtHif+OC4DeqP+rKOFpxYMbfYs9h7S7AjV8
+9TO7sF0RKKRZqckgtI1GfIxVMchf9j/vvyjo8bK6zQ06ecCQQKdluuOxvylLDhEl
+A43dIIKe+Jua5TWr2tXli0I4kHPDhIbgeTALrk80iCzbpPTzZEQMjm63z4Hih7GZ
+NlIPqJAO1jFJB1GbwiODomzb/Gvh7jJycyVsaFcEgQb4e3TGjXnFIntfzxzIk0T/
+HOIQaCsfOaqrER8nNeH0u1Mabp0vTK0bEon+602t4VCN+8mwBdXu9Hlm6JAVuUAH
+ZLHsQVI5jcPc6r1JAsssTAmkxsPDmNRh5ZavgVCWZD8CggEBAIlvxVMXUn9CguXE
+/hk5Q0g4myUKyk44zD3gGXtd0UCy7JfiatKRcdcHb/z3hALc+LcoS7kQ7RP/0OXf
+W3ko44HWol7zK4bG4WjDSB9/GNoXyjMgjmVQwM6ms6oCO3u+DNu/c0fQHOIrvIM8
+Da12OrMSqZpf1m+SLgBQGUnBtoSgIuDCodnlPpcMRwI69qc1XrJILxsaIvP+cA3f
+odtC0hZqpm1j1y1DUVTSQ4mtZIzzYWm1LyD/q3ORXbbaQoalpDfF6I8chbC52wti
+wOq/YX+bavXDtPESUY4Exkc8+XsZmPcsjvyVGSFL8iUA2QD/IXz5unfvGcQKQG6Y
+2ig+0g0CggEAPnyDIBm8UxjF6pDmcKRl+e1RfjJavY7nxAAq4EoEnqbAkEv7U16H
+wzQI6PSJHwqDginc0UiAYKXjuHn8x9r1kwCQK67V5OkOvvcnf1LHyd5JZqoZqW+5
+XTaBwFtG4jpxjtsB1XP9x3jeUUtVeuMFNGrRYjLt45L0dvE3j87zTJgc5VCB+VEY
+tklZxD3jDoxqY+C7ZH7p6e7B8Qfcalp5aBo7eQnIcMki/WIs4WjW2aSgOIQmkUgK
+dtRRrAyy+BVX5x8vTr5TSaU0hNKimoAjuF1gEJ8dU+q9bgy1dB+fTjHY9Kajbtor
+mflesbftBFTl33kIGEGA43eOb46zzU+96QKCAQAQGWgxJjTKjVi+YU0MbpEXXFXp
+TfQWEzdHjsG4Tl8u0ReN263h1Wq+yMOtptYP3eTgIw2pGj2OfjYbWgrGtQogWsWw
+8I1B8GHXJ0iocqh26nPsn5hQvLa9PxFI5cApfGyE7NEa2LZkzSNgr3OcIdU/+UWB
+LXk8/e12ZJxWUQr6JBQpVtNjfAhLtb5qWgDCFycSxU5Yv9x4+r1iIW3QBv3pkBtu
+GeGQ0q6Ce8HNPCQm2blC8zjviyW7xCS+Ypc+DC6+tdVfhR+BlYjThI6pDGIQ+J9W
+AxCf21mySfXuJFtcdR/AwHpDN1m7vUh0EgsF/aH/UWZmrK2dlQHNUCoHFfo5
+-----END RSA PRIVATE KEY-----`;
+
+      const testPrivateKey = forge.pki.privateKeyFromPem(privateKeyPem);
+
+      const signCallback = async data => {
+        const rawData = forge.util.decode64(data);
+        const md = forge.md.sha256.create();
+        md.update(rawData);
+        const signature = testPrivateKey.sign(md);
+        return forge.util.encode64(signature);
+      };
+
+      const client = await SSHClient.connect(HOST, PORT, 'user');
+      await client.authenticateWithSignCallback(publicKey, signCallback);
+      setStatus('RSA 4096 Sign Callback Connected!');
+      client.disconnect();
+    } catch (error) {
+      setStatus(`RSA 4096 Sign Callback Failed: ${error.message}`);
+    }
+  };
+
+  const testECDSASignCallback = async () => {
+    setStatus('Testing ECDSA P-256 Sign Callback...');
+    try {
+      const publicKeySSH = `ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBLhdrx7gSQTwYBAYZzpnaQV6qP4WZrhb6xSGRkqB81hXgqiRE/WBemTAlMDrMlowrrt9eINJAVOtfujqQzwkrNs= your-comment`;
+      const publicKey = publicKeySSH.split(' ')[1];
+
+      const privateKeyPem = `-----BEGIN EC PRIVATE KEY-----
+MIIBaAIBAQQgJfd8lr/2mBmJ8+tQUfiFAi1GkX2FjDczJTCQy2pKIW2ggfowgfcC
+AQEwLAYHKoZIzj0BAQIhAP////8AAAABAAAAAAAAAAAAAAAA////////////////
+MFsEIP////8AAAABAAAAAAAAAAAAAAAA///////////////8BCBaxjXYqjqT57Pr
+vVV2mIa8ZR0GsMxTsPY7zjw+J9JgSwMVAMSdNgiG5wSTamZ44ROdJreBn36QBEEE
+axfR8uEsQkf4vOblY6RA8ncDfYEt6zOg9KE5RdiYwpZP40Li/hp/m47n60p8D54W
+K84zV2sxXs7LtkBoN79R9QIhAP////8AAAAA//////////+85vqtpxeehPO5ysL8
+YyVRAgEBoUQDQgAEuF2vHuBJBPBgEBhnOmdpBXqo/hZmuFvrFIZGSoHzWFeCqJET
+9YF6ZMCUwOsyWjCuu314g0kBU61+6OpDPCSs2w==
+-----END EC PRIVATE KEY-----`;
+
+      const testPrivateKey = forge.pki.privateKeyFromPem(privateKeyPem);
+
+      const signCallback = async data => {
+        const rawData = forge.util.decode64(data);
+        const md = forge.md.sha256.create();
+        md.update(rawData);
+        const signature = testPrivateKey.sign(md);
+        return forge.util.encode64(signature);
+      };
+
+      const client = await SSHClient.connect(HOST, PORT, 'user');
+      await client.authenticateWithSignCallback(publicKey, signCallback);
+      setStatus('ECDSA P-256 Sign Callback Connected!');
+      client.disconnect();
+    } catch (error) {
+      setStatus(`ECDSA P-256 Sign Callback Failed: ${error.message}`);
+    }
+  };
+
+  const testEd25519SignCallback = async () => {
+    setStatus('Testing Ed25519 Sign Callback...');
+    try {
+      const publicKeySSH = `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBWVSpConE3qgn9svoFIW71w/o5M8blpIZFWtSbOGjkb test-ed25519-key`;
+      const publicKey = publicKeySSH.split(' ')[1];
+
+      // Ed25519 requires different handling - this is a mock implementation
+      const signCallback = async data => {
+        // Ed25519 signing would require a different crypto library
+        // For now, return a mock signature to test the callback mechanism
+        const mockSignature = forge.util.encode64(
+          'mock-ed25519-signature-' + data.substring(0, 10),
+        );
+        return mockSignature;
+      };
+
+      const client = await SSHClient.connect(HOST, PORT, 'user');
+      await client.authenticateWithSignCallback(publicKey, signCallback);
+      setStatus('Ed25519 Sign Callback Connected!');
+      client.disconnect();
+    } catch (error) {
+      setStatus(`Ed25519 Sign Callback Failed: ${error.message}`);
     }
   };
 
@@ -379,34 +526,95 @@ xpWXeGkW2vnB3XpTAAAAFXVuYXV0aG9yaXplZEB0ZXN0LmNvbQECAwQF
 
   return (
     <View style={styles.container} testID="main-container">
-      <Text style={styles.title} testID="title">SSH SFTP Example</Text>
-      <Text style={styles.status} testID="status">Status: {status}</Text>
+      <Text style={styles.title} testID="title">
+        SSH SFTP Example
+      </Text>
+      <Text style={styles.status} testID="status">
+        Status: {status}
+      </Text>
       <ScrollView style={styles.scrollView} testID="scroll-view">
-        <TouchableOpacity style={styles.button} onPress={testConnection} testID="test-button">
+        <TouchableOpacity
+          style={styles.button}
+          onPress={testConnection}
+          testID="test-button"
+        >
           <Text style={styles.buttonText}>Test SSH</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.button} onPress={testDockerConnection} testID="docker-test-button">
+        <TouchableOpacity
+          style={styles.button}
+          onPress={testDockerConnection}
+          testID="docker-test-button"
+        >
           <Text style={styles.buttonText}>Docker SSH</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.button} onPress={testRSAKey} testID="rsa-key-button">
+        <TouchableOpacity
+          style={styles.button}
+          onPress={testRSAKey}
+          testID="rsa-key-button"
+        >
           <Text style={styles.buttonText}>RSA Key</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.button} onPress={testOpenSSHKey} testID="openssh-key-button">
+        <TouchableOpacity
+          style={styles.button}
+          onPress={testOpenSSHKey}
+          testID="openssh-key-button"
+        >
           <Text style={styles.buttonText}>OpenSSH Key</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.button} onPress={testEncryptedRSAKey} testID="encrypted-rsa-key-button">
+        <TouchableOpacity
+          style={styles.button}
+          onPress={testEncryptedRSAKey}
+          testID="encrypted-rsa-key-button"
+        >
           <Text style={styles.buttonText}>Encrypted RSA</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.button} onPress={testSFTP} testID="sftp-test-button">
+        <TouchableOpacity
+          style={styles.button}
+          onPress={testSFTP}
+          testID="sftp-test-button"
+        >
           <Text style={styles.buttonText}>SFTP Test</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.button} onPress={testSignCallback} testID="sign-callback-button">
-          <Text style={styles.buttonText}>Sign Callback</Text>
+        <TouchableOpacity
+          style={styles.button}
+          onPress={testSignCallback}
+          testID="sign-callback-button"
+        >
+          <Text style={styles.buttonText}>RSA 2048 Sign</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.button} onPress={testBadPassword} testID="bad-password-button">
+        <TouchableOpacity
+          style={styles.button}
+          onPress={testRSA4096SignCallback}
+          testID="rsa4096-sign-callback-button"
+        >
+          <Text style={styles.buttonText}>RSA 4096 Sign</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.button}
+          onPress={testECDSASignCallback}
+          testID="ecdsa-sign-callback-button"
+        >
+          <Text style={styles.buttonText}>ECDSA P-256 Sign</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.button}
+          onPress={testEd25519SignCallback}
+          testID="ed25519-sign-callback-button"
+        >
+          <Text style={styles.buttonText}>Ed25519 Sign</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.button}
+          onPress={testBadPassword}
+          testID="bad-password-button"
+        >
           <Text style={styles.buttonText}>Bad Password</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.button} onPress={testBadRSAKey} testID="bad-rsa-key-button">
+        <TouchableOpacity
+          style={styles.button}
+          onPress={testBadRSAKey}
+          testID="bad-rsa-key-button"
+        >
           <Text style={styles.buttonText}>Bad RSA Key</Text>
         </TouchableOpacity>
       </ScrollView>

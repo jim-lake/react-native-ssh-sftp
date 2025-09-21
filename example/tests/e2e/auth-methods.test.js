@@ -51,10 +51,34 @@ describe('SSH SFTP Authentication Methods Tests', () => {
     await detoxExpected(element(by.id('status'))).toHaveText('Status: SFTP Connected! Found 1 files');
   });
 
-  it('should test sign callback authentication', async () => {
+  it('should test RSA 2048 sign callback authentication', async () => {
     await element(by.id('sign-callback-button')).tap();
     await new Promise(resolve => setTimeout(resolve, 6800));
-    await detoxExpected(element(by.id('status'))).toHaveText('Status: Sign Callback Connected!');
+    await detoxExpected(element(by.id('status'))).toHaveText('Status: RSA 2048 Sign Callback Connected!');
+  });
+
+  it('should test ECDSA P-256 sign callback authentication', async () => {
+    await element(by.id('ecdsa-sign-callback-button')).tap();
+    await new Promise(resolve => setTimeout(resolve, 6800));
+    await detoxExpected(element(by.id('status'))).toHaveText('Status: ECDSA P-256 Sign Callback Connected!');
+  });
+
+  it('should test Ed25519 sign callback authentication', async () => {
+    await element(by.id('ed25519-sign-callback-button')).tap();
+    await new Promise(resolve => setTimeout(resolve, 6800));
+    await detoxExpected(element(by.id('status'))).toHaveText('Status: Ed25519 Sign Callback Connected!');
+  });
+
+  it('should test bad password authentication (expected failure)', async () => {
+    await element(by.id('bad-password-button')).tap();
+    await new Promise(resolve => setTimeout(resolve, 3600));
+    await detoxExpected(element(by.id('status'))).toHaveText('Status: Bad Password: Authentication Failed (Expected)');
+  });
+
+  it('should test bad RSA key authentication (expected failure)', async () => {
+    await element(by.id('bad-rsa-key-button')).tap();
+    await new Promise(resolve => setTimeout(resolve, 3600));
+    await detoxExpected(element(by.id('status'))).toHaveText('Status: Bad RSA Key: Authentication Failed (Expected)');
   });
 
   it('should test basic SSH functionality', async () => {

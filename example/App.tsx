@@ -9,6 +9,123 @@ import {
 } from 'react-native';
 import SSHClient from 'react-native-ssh-sftp';
 import forge from 'node-forge';
+import nacl from 'tweetnacl';
+import naclUtil from 'tweetnacl-util';
+import elliptic from 'elliptic';
+
+// Key extraction utilities
+function extractP256PrivateKey(privateKeyPem) {
+  try {
+    // Parse the EC private key using forge
+    const asn1 = forge.asn1.fromDer(forge.pem.decode(privateKeyPem)[0].body);
+    
+    // EC private key structure: SEQUENCE { version, privateKey, ... }
+    // privateKey is an OCTET STRING containing the 32-byte private key
+    const privateKeyOctetString = asn1.value[1]; // Second element is the private key
+    const privateKeyBytes = privateKeyOctetString.value;
+    
+    // Convert to Uint8Array and ensure it's exactly 32 bytes
+    const keyArray = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) {
+      keyArray[i] = privateKeyBytes.charCodeAt(i);
+    }
+    
+    return keyArray;
+  } catch (error) {
+    throw new Error(`Failed to extract P-256 private key: ${error.message}`);
+  }
+}
+
+function extractEd25519PrivateKey(opensshPrivateKey) {
+  try {
+    // Remove PEM headers and decode base64
+    const keyData = opensshPrivateKey
+      .replace(/-----[^-]+-----/g, '')
+      .replace(/\s/g, '');
+    
+    const decoded = forge.util.decode64(keyData);
+    
+    // Parse OpenSSH private key format
+    // Skip magic bytes "openssh-key-v1\0"
+    let offset = 15;
+    
+    // Skip ciphername length + ciphername ("none")
+    const cipherNameLen = (decoded.charCodeAt(offset) << 24) | 
+                          (decoded.charCodeAt(offset + 1) << 16) | 
+                          (decoded.charCodeAt(offset + 2) << 8) | 
+                          decoded.charCodeAt(offset + 3);
+    offset += 4 + cipherNameLen;
+    
+    // Skip kdfname length + kdfname ("none")
+    const kdfNameLen = (decoded.charCodeAt(offset) << 24) | 
+                       (decoded.charCodeAt(offset + 1) << 16) | 
+                       (decoded.charCodeAt(offset + 2) << 8) | 
+                       decoded.charCodeAt(offset + 3);
+    offset += 4 + kdfNameLen;
+    
+    // Skip kdf length + kdf (empty)
+    const kdfLen = (decoded.charCodeAt(offset) << 24) | 
+                   (decoded.charCodeAt(offset + 1) << 16) | 
+                   (decoded.charCodeAt(offset + 2) << 8) | 
+                   decoded.charCodeAt(offset + 3);
+    offset += 4 + kdfLen;
+    
+    // Skip number of keys (should be 1)
+    offset += 4;
+    
+    // Skip public key length + public key
+    const pubKeyLen = (decoded.charCodeAt(offset) << 24) | 
+                      (decoded.charCodeAt(offset + 1) << 16) | 
+                      (decoded.charCodeAt(offset + 2) << 8) | 
+                      decoded.charCodeAt(offset + 3);
+    offset += 4 + pubKeyLen;
+    
+    // Get private key section length
+    const privKeyLen = (decoded.charCodeAt(offset) << 24) | 
+                       (decoded.charCodeAt(offset + 1) << 16) | 
+                       (decoded.charCodeAt(offset + 2) << 8) | 
+                       decoded.charCodeAt(offset + 3);
+    offset += 4;
+    
+    // Skip checkint1 and checkint2 (8 bytes total)
+    offset += 8;
+    
+    // Skip key type length + key type ("ssh-ed25519")
+    const keyTypeLen = (decoded.charCodeAt(offset) << 24) | 
+                       (decoded.charCodeAt(offset + 1) << 16) | 
+                       (decoded.charCodeAt(offset + 2) << 8) | 
+                       decoded.charCodeAt(offset + 3);
+    offset += 4 + keyTypeLen;
+    
+    // Skip public key length + public key (32 bytes)
+    const pubKeyLen2 = (decoded.charCodeAt(offset) << 24) | 
+                       (decoded.charCodeAt(offset + 1) << 16) | 
+                       (decoded.charCodeAt(offset + 2) << 8) | 
+                       decoded.charCodeAt(offset + 3);
+    offset += 4 + pubKeyLen2;
+    
+    // Get private key length (should be 64 bytes: 32 private + 32 public)
+    const privKeyDataLen = (decoded.charCodeAt(offset) << 24) | 
+                           (decoded.charCodeAt(offset + 1) << 16) | 
+                           (decoded.charCodeAt(offset + 2) << 8) | 
+                           decoded.charCodeAt(offset + 3);
+    offset += 4;
+    
+    if (privKeyDataLen !== 64) {
+      throw new Error(`Expected 64 bytes for Ed25519 private key data, got ${privKeyDataLen}`);
+    }
+    
+    // Extract the first 32 bytes (the actual private key)
+    const privateKeyArray = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) {
+      privateKeyArray[i] = decoded.charCodeAt(offset + i);
+    }
+    
+    return privateKeyArray;
+  } catch (error) {
+    throw new Error(`Failed to extract Ed25519 private key: ${error.message}`);
+  }
+}
 
 import {
   Platform,
@@ -205,25 +322,13 @@ gabzR7vGspCHltGME7l7mIe6l13ixn8dd8ils2j97NjMbafncDkQM/uwsZaXU/JU
   };
 
   const testSignCallback = async () => {
-    console.log('=== STARTING RSA 2048 SIGN CALLBACK TEST ===');
     setStatus('Testing RSA 2048 Sign Callback...');
-
     try {
-      // Use the actual working public key from test environment
+      // Use the correct public key from id_rsa_nopass.pub
       const publicKeySSH = `ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC/XulQBQ2ms2sA+0QIe5XPWdmGDqb5oBzBjODFUQPIdF9etRRlEfQQDS6+YGailP/F+WGMWN3OvWHBTVwEXkxSzPc0qfG5sqdqeQf/1STvkN+I98SWYIaKEkv0IVe5eTAMr8atA8gzX3w9XHoqtg4aeeZtz5uBgd3q2YdG9RiRkTMJ4YHT5TzQSFJy+FCuV4SP4SaU/Zv5Q/grZTsMcBal1tziu3xnuYH5vJmvFXXDPwUiJ6da+oUYf7D+wsqlL8/KDyiRPg2VX+E9rIoNe2J56MWjUoqoa/45Y7TaND8zN9fxTw6bgU9W9Yre5JpLaR9KtvoETe6lIprc5IV54PWx test-agent@nmssh`;
+      const publicKey = publicKeySSH.split(' ')[1];
 
-      console.log('1. Full SSH public key:', publicKeySSH);
-
-      // Extract base64 part and decode it to get the actual SSH wire format data
-      const parts = publicKeySSH.split(' ');
-      console.log('2. SSH key parts:', parts);
-      const publicKey = parts[1];
-      console.log('3. Extracted base64 public key:', publicKey);
-      console.log('4. Base64 public key length:', publicKey.length);
-
-      // Use the actual working private key from test environment
-      const privateKeyPem = `
------BEGIN RSA PRIVATE KEY-----
+      const privateKeyPem = `-----BEGIN RSA PRIVATE KEY-----
 MIIEowIBAAKCAQEAv17pUAUNprNrAPtECHuVz1nZhg6m+aAcwYzgxVEDyHRfXrUU
 ZRH0EA0uvmBmopT/xflhjFjdzr1hwU1cBF5MUsz3NKnxubKnankH/9Uk75DfiPfE
 lmCGihJL9CFXuXkwDK/GrQPIM198PVx6KrYOGnnmbc+bgYHd6tmHRvUYkZEzCeGB
@@ -249,87 +354,23 @@ hr9JBUdLIfNH6fYURRggHWb1A01jIckgBbb6N6eKWJQAonfrNqv/y2E/e9rNX8I0
 h+BchQKBgFkO4+5fL/7sB2EG9VBw1AaQwM2esO07Zv0emOYojXqVKShAL2xD7dw1
 HYI/V6f7UiJ+EL+LJUjkPYx0GLU1hO24xZlK3TjVzYLuEGxtRVLvT9hOx26s28cE
 gQT51sWj0C7S5tkmVWqRbuKLPLNTa4IW+Ls30yReijz95DWMHf0X
------END RSA PRIVATE KEY-----
-`;
+-----END RSA PRIVATE KEY-----`;
 
-      console.log('Private key PEM length:', privateKeyPem.length);
-
-      let testPrivateKey;
-      try {
-        testPrivateKey = forge.pki.privateKeyFromPem(privateKeyPem);
-        console.log('Private key parsed successfully');
-        console.log(
-          'Private key modulus length:',
-          testPrivateKey.n.bitLength(),
-        );
-        //console.log('Private key:', testPrivateKey);
-      } catch (keyError) {
-        console.error('FAILED to parse private key:', keyError);
-        throw keyError;
-      }
+      const testPrivateKey = forge.pki.privateKeyFromPem(privateKeyPem);
 
       const signCallback = async data => {
-        console.log('=== SIGN CALLBACK INVOKED ===');
-        console.log('Received data parameter:', typeof data, data);
-        console.log('Data length:', data ? data.length : 'null/undefined');
-
-        try {
-          if (!data) {
-            console.error('ERROR: No data provided to sign callback');
-            throw new Error('No data provided to sign callback');
-          }
-
-          console.log('Attempting to decode base64 data...');
-          const rawData = forge.util.decode64(data);
-          console.log('Raw data decoded successfully, length:', rawData.length);
-          console.log('Raw data (hex):', forge.util.bytesToHex(rawData));
-
-          console.log('Parsing private key...');
-
-          console.log('Creating SHA1 hash...');
-          const md = forge.md.sha1.create();
-          md.update(rawData);
-          const hash = md.digest();
-          console.log('SHA1 hash created, length:', hash.length());
-          console.log('SHA1 hash (hex):', forge.util.bytesToHex(hash.data));
-
-          console.log('Signing hash with private key...');
-          const signature = testPrivateKey.sign(md);
-          console.log('Signature created, length:', signature.length);
-          console.log('Signature (hex):', forge.util.bytesToHex(signature));
-
-          console.log('Encoding signature as base64...');
-          const signatureBase64 = forge.util.encode64(signature);
-          console.log('Signature base64 length:', signatureBase64.length);
-          console.log('Signature (base64):', signatureBase64);
-
-          console.log('SIGN CALLBACK RETURNING SUCCESS');
-          return signatureBase64;
-        } catch (error) {
-          console.error('SIGN CALLBACK ERROR:', error);
-          console.error('Error stack:', error.stack);
-          throw error;
-        }
+        const rawData = forge.util.decode64(data);
+        const md = forge.md.sha1.create();
+        md.update(rawData);
+        const signature = testPrivateKey.sign(md);
+        return forge.util.encode64(signature);
       };
 
-      console.log('Creating SSH client connection...');
       const client = await SSHClient.connect(HOST, PORT, 'user');
-      console.log('SSH client connected successfully');
-
-      console.log('Starting sign callback authentication...');
-      console.log('Passing public key data (base64):', publicKey);
       await client.authenticateWithSignCallback(publicKey, signCallback);
-      console.log('Sign callback authentication completed successfully');
-
       setStatus('RSA 2048 Sign Callback Connected!');
       client.disconnect();
-      console.log('SSH client disconnected');
-      console.log('=== RSA 2048 SIGN CALLBACK TEST COMPLETED SUCCESSFULLY ===');
     } catch (error) {
-      console.error('=== SIGN CALLBACK TEST FAILED ===');
-      console.error('Error message:', error.message);
-      console.error('Error stack:', error.stack);
-      console.error('Error object:', error);
       setStatus(`RSA 2048 Sign Callback Failed: ${error.message}`);
     }
   };
@@ -396,7 +437,7 @@ AxCf21mySfXuJFtcdR/AwHpDN1m7vUh0EgsF/aH/UWZmrK2dlQHNUCoHFfo5
 
       const signCallback = async data => {
         const rawData = forge.util.decode64(data);
-        const md = forge.md.sha256.create();
+        const md = forge.md.sha1.create();
         md.update(rawData);
         const signature = testPrivateKey.sign(md);
         return forge.util.encode64(signature);
@@ -428,14 +469,66 @@ YyVRAgEBoUQDQgAEuF2vHuBJBPBgEBhnOmdpBXqo/hZmuFvrFIZGSoHzWFeCqJET
 9YF6ZMCUwOsyWjCuu314g0kBU61+6OpDPCSs2w==
 -----END EC PRIVATE KEY-----`;
 
-      const testPrivateKey = forge.pki.privateKeyFromPem(privateKeyPem);
+      // Extract the 32-byte private key using our utility
+      const privateKeyBytes = extractP256PrivateKey(privateKeyPem);
+      
+      const EC = elliptic.ec;
+      const ec = new EC('p256');
+      const keyPair = ec.keyFromPrivate(privateKeyBytes);
 
       const signCallback = async data => {
-        const rawData = forge.util.decode64(data);
-        const md = forge.md.sha256.create();
-        md.update(rawData);
-        const signature = testPrivateKey.sign(md);
-        return forge.util.encode64(signature);
+        console.log('ECDSA P-256 sign callback called with data length:', forge.util.decode64(data).length);
+        try {
+          const rawData = forge.util.decode64(data);
+          const hash = forge.md.sha256.create();
+          hash.update(rawData);
+          const hashBytes = hash.digest().getBytes();
+          
+          // Sign with ECDSA
+          const signature = keyPair.sign(forge.util.bytesToHex(hashBytes), 'hex');
+          
+          // Convert to SSH wire format
+          const r = signature.r.toArray('be', 32);
+          const s = signature.s.toArray('be', 32);
+          
+          // Create SSH wire format signature manually
+          const sshSignature = new Uint8Array(74); // 4 + 1 + 32 + 4 + 1 + 32 = 74
+          let offset = 0;
+          
+          // r length (33 bytes)
+          sshSignature[offset++] = 0x00;
+          sshSignature[offset++] = 0x00;
+          sshSignature[offset++] = 0x00;
+          sshSignature[offset++] = 0x21;
+          
+          // leading zero for r
+          sshSignature[offset++] = 0x00;
+          
+          // r component (32 bytes)
+          for (let i = 0; i < 32; i++) {
+            sshSignature[offset++] = r[i];
+          }
+          
+          // s length (33 bytes)
+          sshSignature[offset++] = 0x00;
+          sshSignature[offset++] = 0x00;
+          sshSignature[offset++] = 0x00;
+          sshSignature[offset++] = 0x21;
+          
+          // leading zero for s
+          sshSignature[offset++] = 0x00;
+          
+          // s component (32 bytes)
+          for (let i = 0; i < 32; i++) {
+            sshSignature[offset++] = s[i];
+          }
+          
+          console.log('ECDSA P-256 signature generated, length:', sshSignature.length);
+          return forge.util.encode64(forge.util.binary.raw.encode(sshSignature));
+        } catch (error) {
+          console.error('ECDSA P-256 signing error:', error);
+          throw error;
+        }
       };
 
       const client = await SSHClient.connect(HOST, PORT, 'user');
@@ -453,14 +546,41 @@ YyVRAgEBoUQDQgAEuF2vHuBJBPBgEBhnOmdpBXqo/hZmuFvrFIZGSoHzWFeCqJET
       const publicKeySSH = `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBWVSpConE3qgn9svoFIW71w/o5M8blpIZFWtSbOGjkb test-ed25519-key`;
       const publicKey = publicKeySSH.split(' ')[1];
 
-      // Ed25519 requires different handling - this is a mock implementation
+      const privateKeyOpenSSH = `-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
+QyNTUxOQAAACAVlUqQqJxN6oJ/bL6BSFu9cP6OTPG5aSGRVrUmzho5GwAAAJjbmvDh25rw
+4QAAAAtzc2gtZWQyNTUxOQAAACAVlUqQqJxN6oJ/bL6BSFu9cP6OTPG5aSGRVrUmzho5Gw
+AAAEBGkrNpCuJt+TTQgwXlYGp9rjCS+WmPK+H0fwXDZBtuRhWVSpConE3qgn9svoFIW71w
+/o5M8blpIZFWtSbOGjkbAAAAEHRlc3QtZWQyNTUxOS1rZXkBAgMEBQ==
+-----END OPENSSH PRIVATE KEY-----`;
+
+      // Extract the 32-byte private key seed using our utility
+      const privateKeySeed = extractEd25519PrivateKey(privateKeyOpenSSH);
+      
+      // Generate the full key pair from the seed
+      const keyPair = nacl.sign.keyPair.fromSeed(privateKeySeed);
+      
       const signCallback = async data => {
-        // Ed25519 signing would require a different crypto library
-        // For now, return a mock signature to test the callback mechanism
-        const mockSignature = forge.util.encode64(
-          'mock-ed25519-signature-' + data.substring(0, 10),
-        );
-        return mockSignature;
+        console.log('Ed25519 sign callback called with data length:', forge.util.decode64(data).length);
+        try {
+          const rawData = forge.util.decode64(data);
+          
+          // Convert message to Uint8Array
+          const messageArray = new Uint8Array(rawData.length);
+          for (let i = 0; i < rawData.length; i++) {
+            messageArray[i] = rawData.charCodeAt(i);
+          }
+          
+          // Sign with Ed25519 using the full secret key (64 bytes)
+          const signature = nacl.sign.detached(messageArray, keyPair.secretKey);
+          
+          console.log('Ed25519 signature generated, length:', signature.length);
+          // Convert signature to base64
+          return naclUtil.encodeBase64(signature);
+        } catch (error) {
+          console.error('Ed25519 signing error:', error);
+          throw error;
+        }
       };
 
       const client = await SSHClient.connect(HOST, PORT, 'user');

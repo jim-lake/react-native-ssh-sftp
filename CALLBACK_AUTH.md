@@ -85,36 +85,60 @@ type SignCallback = (data: string) => Promise<string>;
 
 The `publicKey` parameter must be the **base64-encoded SSH wire format public key blob** - this is the middle section of an OpenSSH public key file.
 
-#### Extracting from OpenSSH Public Key
+**IMPORTANT**: For RSA keys, the algorithm identifier in the SSH wire format determines the signature algorithm:
+- `ssh-rsa` → RSA-SHA1 signatures
+- `rsa-sha2-256` → RSA-SHA256 signatures  
+- `rsa-sha2-512` → RSA-SHA512 signatures
 
-Given an OpenSSH public key file like:
+#### RSA Key Files vs Authentication Parameter
+
+**RSA public key files** (like `id_rsa.pub` and `authorized_keys`) always use `ssh-rsa`:
 ```
 ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ... user@host
 ```
 
-The `publicKey` parameter should be:
-```
-AAAAB3NzaC1yc2EAAAADAQABAAABAQ...
+**For RSA-SHA256 authentication**, you must modify the SSH wire format to specify `rsa-sha2-256`:
+
+```typescript
+// 1. Start with standard RSA public key
+const opensshKey = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ... user@host";
+const originalKey = opensshKey.split(' ')[1];
+
+// 2. Decode and modify SSH wire format
+const keyBytes = forge.util.decode64(originalKey);
+// Parse: [alg_len][algorithm][e_len][e][n_len][n]
+// Replace "ssh-rsa" with "rsa-sha2-256" and update length bytes
+
+// 3. Use modified key for SHA256 authentication
+await client.authenticateWithSignCallback(modifiedPublicKey, sha256SignCallback);
 ```
 
 #### What happens internally:
 
-1. **JavaScript layer**: You pass the base64 string (e.g., `"AAAAB3NzaC1yc2E..."`)
+1. **JavaScript layer**: You pass the base64 string with algorithm identifier
 2. **Native iOS layer**: Converts to NSData using `initWithBase64EncodedString`
 3. **NMSSH library**: Receives the SSH wire format binary data
-4. **SSH protocol**: Uses the binary blob for authentication
+4. **SSH protocol**: Uses algorithm identifier to determine signature type
 
-#### Code example:
+#### Code example for RSA-SHA1 (standard):
 
 ```typescript
-// Given this OpenSSH public key:
+// Standard RSA-SHA1 authentication
 const opensshKey = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ... user@host";
+const publicKey = opensshKey.split(' ')[1]; // Uses ssh-rsa → SHA1 signatures
+await client.authenticateWithSignCallback(publicKey, sha1SignCallback);
+```
 
-// Extract the base64 part (index 1 when split by spaces):
-const publicKey = opensshKey.split(' ')[1]; // "AAAAB3NzaC1yc2EAAAADAQABAAABAQ..."
+#### Code example for RSA-SHA256:
 
-// Use in authentication:
-await client.authenticateWithSignCallback(publicKey, signCallback);
+```typescript
+// RSA-SHA256 authentication requires wire format modification
+const opensshKey = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ... user@host";
+const originalKey = opensshKey.split(' ')[1];
+
+// Modify SSH wire format to specify rsa-sha2-256
+const modifiedKey = modifyRSAKeyForSHA256(originalKey); // See implementation above
+await client.authenticateWithSignCallback(modifiedKey, sha256SignCallback);
 ```
 
 ## Signature Format Requirements

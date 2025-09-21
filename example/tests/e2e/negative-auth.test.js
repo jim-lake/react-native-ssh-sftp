@@ -1,8 +1,8 @@
-const {device, element, by, expect: detoxExpected} = require('detox');
+const { device, element, by, expect: detoxExpected } = require('detox');
 
 describe('SSH SFTP Negative Authentication Tests', () => {
   beforeAll(async () => {
-    await device.launchApp({newInstance: true});
+    await device.launchApp({ newInstance: true });
     await new Promise(resolve => setTimeout(resolve, 2000));
   }, 30000);
 
@@ -20,13 +20,17 @@ describe('SSH SFTP Negative Authentication Tests', () => {
     await element(by.id('bad-password-button')).tap();
     await new Promise(resolve => setTimeout(resolve, 4000));
     // Check that authentication failed as expected
-    await detoxExpected(element(by.id('status'))).toHaveText('Status: Bad Password: Authentication Failed (Expected)');
+    await detoxExpected(element(by.id('status'))).toHaveText(
+      'Status: Bad Password: Authentication Failed (Expected)',
+    );
   });
 
   it('should reject unauthorized RSA key authentication', async () => {
     await element(by.id('bad-rsa-key-button')).tap();
     await new Promise(resolve => setTimeout(resolve, 4000));
     // Check that authentication failed as expected
-    await detoxExpected(element(by.id('status'))).toHaveText('Status: Bad RSA Key: Authentication Failed (Expected)');
+    await detoxExpected(element(by.id('status'))).toHaveText(
+      'Status: Bad RSA Key: Authentication Failed (Expected)',
+    );
   });
 });

@@ -5,6 +5,7 @@ This directory contains Detox end-to-end tests for the SSH SFTP example app.
 ## Setup
 
 1. Install dependencies:
+
    ```bash
    npm install
    ```
@@ -17,12 +18,14 @@ This directory contains Detox end-to-end tests for the SSH SFTP example app.
 ## Running Tests
 
 ### iOS
+
 ```bash
 npm run e2e:build:ios
 npm run e2e:test:ios
 ```
 
 ### Android
+
 ```bash
 npm run e2e:build:android
 npm run e2e:test:android

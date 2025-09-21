@@ -1,8 +1,8 @@
-const {device, element, by, expect: detoxExpected} = require('detox');
+const { device, element, by, expect: detoxExpected } = require('detox');
 
 describe('SSH SFTP App Tests', () => {
   beforeAll(async () => {
-    await device.launchApp({newInstance: true});
+    await device.launchApp({ newInstance: true });
     await new Promise(resolve => setTimeout(resolve, 2000));
   }, 30000);
 
@@ -20,7 +20,7 @@ describe('SSH SFTP App Tests', () => {
     // Test that alerts are properly handled when they appear
     await element(by.id('docker-test-button')).tap();
     await new Promise(resolve => setTimeout(resolve, 7300));
-    
+
     // Should show success alert for Docker SSH connection
     try {
       await element(by.label('OK')).atIndex(0).tap();
@@ -28,8 +28,10 @@ describe('SSH SFTP App Tests', () => {
     } catch (error) {
       // Alert might not appear in test environment
     }
-    
+
     // Check final status
-    await detoxExpected(element(by.id('status'))).toHaveText('Status: Docker SSH Connected!');
+    await detoxExpected(element(by.id('status'))).toHaveText(
+      'Status: Docker SSH Connected!',
+    );
   });
 });

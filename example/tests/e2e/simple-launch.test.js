@@ -1,8 +1,8 @@
-const {device, element, by, expect: detoxExpected} = require('detox');
+const { device, element, by, expect: detoxExpected } = require('detox');
 
 describe('SSH SFTP Simple Launch Tests', () => {
   beforeAll(async () => {
-    await device.launchApp({newInstance: true});
+    await device.launchApp({ newInstance: true });
     await new Promise(resolve => setTimeout(resolve, 2000));
   }, 30000);
 

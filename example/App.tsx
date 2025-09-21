@@ -18,18 +18,18 @@ function extractP256PrivateKey(privateKeyPem) {
   try {
     // Parse the EC private key using forge
     const asn1 = forge.asn1.fromDer(forge.pem.decode(privateKeyPem)[0].body);
-    
+
     // EC private key structure: SEQUENCE { version, privateKey, ... }
     // privateKey is an OCTET STRING containing the 32-byte private key
     const privateKeyOctetString = asn1.value[1]; // Second element is the private key
     const privateKeyBytes = privateKeyOctetString.value;
-    
+
     // Convert to Uint8Array and ensure it's exactly 32 bytes
     const keyArray = new Uint8Array(32);
     for (let i = 0; i < 32; i++) {
       keyArray[i] = privateKeyBytes.charCodeAt(i);
     }
-    
+
     return keyArray;
   } catch (error) {
     throw new Error(`Failed to extract P-256 private key: ${error.message}`);
@@ -42,85 +42,95 @@ function extractEd25519PrivateKey(opensshPrivateKey) {
     const keyData = opensshPrivateKey
       .replace(/-----[^-]+-----/g, '')
       .replace(/\s/g, '');
-    
+
     const decoded = forge.util.decode64(keyData);
-    
+
     // Parse OpenSSH private key format
     // Skip magic bytes "openssh-key-v1\0"
     let offset = 15;
-    
+
     // Skip ciphername length + ciphername ("none")
-    const cipherNameLen = (decoded.charCodeAt(offset) << 24) | 
-                          (decoded.charCodeAt(offset + 1) << 16) | 
-                          (decoded.charCodeAt(offset + 2) << 8) | 
-                          decoded.charCodeAt(offset + 3);
+    const cipherNameLen =
+      (decoded.charCodeAt(offset) << 24) |
+      (decoded.charCodeAt(offset + 1) << 16) |
+      (decoded.charCodeAt(offset + 2) << 8) |
+      decoded.charCodeAt(offset + 3);
     offset += 4 + cipherNameLen;
-    
+
     // Skip kdfname length + kdfname ("none")
-    const kdfNameLen = (decoded.charCodeAt(offset) << 24) | 
-                       (decoded.charCodeAt(offset + 1) << 16) | 
-                       (decoded.charCodeAt(offset + 2) << 8) | 
-                       decoded.charCodeAt(offset + 3);
+    const kdfNameLen =
+      (decoded.charCodeAt(offset) << 24) |
+      (decoded.charCodeAt(offset + 1) << 16) |
+      (decoded.charCodeAt(offset + 2) << 8) |
+      decoded.charCodeAt(offset + 3);
     offset += 4 + kdfNameLen;
-    
+
     // Skip kdf length + kdf (empty)
-    const kdfLen = (decoded.charCodeAt(offset) << 24) | 
-                   (decoded.charCodeAt(offset + 1) << 16) | 
-                   (decoded.charCodeAt(offset + 2) << 8) | 
-                   decoded.charCodeAt(offset + 3);
+    const kdfLen =
+      (decoded.charCodeAt(offset) << 24) |
+      (decoded.charCodeAt(offset + 1) << 16) |
+      (decoded.charCodeAt(offset + 2) << 8) |
+      decoded.charCodeAt(offset + 3);
     offset += 4 + kdfLen;
-    
+
     // Skip number of keys (should be 1)
     offset += 4;
-    
+
     // Skip public key length + public key
-    const pubKeyLen = (decoded.charCodeAt(offset) << 24) | 
-                      (decoded.charCodeAt(offset + 1) << 16) | 
-                      (decoded.charCodeAt(offset + 2) << 8) | 
-                      decoded.charCodeAt(offset + 3);
+    const pubKeyLen =
+      (decoded.charCodeAt(offset) << 24) |
+      (decoded.charCodeAt(offset + 1) << 16) |
+      (decoded.charCodeAt(offset + 2) << 8) |
+      decoded.charCodeAt(offset + 3);
     offset += 4 + pubKeyLen;
-    
+
     // Get private key section length
-    const privKeyLen = (decoded.charCodeAt(offset) << 24) | 
-                       (decoded.charCodeAt(offset + 1) << 16) | 
-                       (decoded.charCodeAt(offset + 2) << 8) | 
-                       decoded.charCodeAt(offset + 3);
+    const privKeyLen =
+      (decoded.charCodeAt(offset) << 24) |
+      (decoded.charCodeAt(offset + 1) << 16) |
+      (decoded.charCodeAt(offset + 2) << 8) |
+      decoded.charCodeAt(offset + 3);
     offset += 4;
-    
+
     // Skip checkint1 and checkint2 (8 bytes total)
     offset += 8;
-    
+
     // Skip key type length + key type ("ssh-ed25519")
-    const keyTypeLen = (decoded.charCodeAt(offset) << 24) | 
-                       (decoded.charCodeAt(offset + 1) << 16) | 
-                       (decoded.charCodeAt(offset + 2) << 8) | 
-                       decoded.charCodeAt(offset + 3);
+    const keyTypeLen =
+      (decoded.charCodeAt(offset) << 24) |
+      (decoded.charCodeAt(offset + 1) << 16) |
+      (decoded.charCodeAt(offset + 2) << 8) |
+      decoded.charCodeAt(offset + 3);
     offset += 4 + keyTypeLen;
-    
+
     // Skip public key length + public key (32 bytes)
-    const pubKeyLen2 = (decoded.charCodeAt(offset) << 24) | 
-                       (decoded.charCodeAt(offset + 1) << 16) | 
-                       (decoded.charCodeAt(offset + 2) << 8) | 
-                       decoded.charCodeAt(offset + 3);
+    const pubKeyLen2 =
+      (decoded.charCodeAt(offset) << 24) |
+      (decoded.charCodeAt(offset + 1) << 16) |
+      (decoded.charCodeAt(offset + 2) << 8) |
+      decoded.charCodeAt(offset + 3);
     offset += 4 + pubKeyLen2;
-    
+
     // Get private key length (should be 64 bytes: 32 private + 32 public)
-    const privKeyDataLen = (decoded.charCodeAt(offset) << 24) | 
-                           (decoded.charCodeAt(offset + 1) << 16) | 
-                           (decoded.charCodeAt(offset + 2) << 8) | 
-                           decoded.charCodeAt(offset + 3);
+    const privKeyDataLen =
+      (decoded.charCodeAt(offset) << 24) |
+      (decoded.charCodeAt(offset + 1) << 16) |
+      (decoded.charCodeAt(offset + 2) << 8) |
+      decoded.charCodeAt(offset + 3);
     offset += 4;
-    
+
     if (privKeyDataLen !== 64) {
-      throw new Error(`Expected 64 bytes for Ed25519 private key data, got ${privKeyDataLen}`);
+      throw new Error(
+        `Expected 64 bytes for Ed25519 private key data, got ${privKeyDataLen}`,
+      );
     }
-    
+
     // Extract the first 32 bytes (the actual private key)
     const privateKeyArray = new Uint8Array(32);
     for (let i = 0; i < 32; i++) {
       privateKeyArray[i] = decoded.charCodeAt(offset + i);
     }
-    
+
     return privateKeyArray;
   } catch (error) {
     throw new Error(`Failed to extract Ed25519 private key: ${error.message}`);
@@ -375,6 +385,122 @@ gQT51sWj0C7S5tkmVWqRbuKLPLNTa4IW+Ls30yReijz95DWMHf0X
     }
   };
 
+  const testRSA2048SHA256SignCallback = async () => {
+    setStatus('Testing RSA 2048 SHA256 Sign Callback...');
+    try {
+      const publicKeySSH = `ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC/XulQBQ2ms2sA+0QIe5XPWdmGDqb5oBzBjODFUQPIdF9etRRlEfQQDS6+YGailP/F+WGMWN3OvWHBTVwEXkxSzPc0qfG5sqdqeQf/1STvkN+I98SWYIaKEkv0IVe5eTAMr8atA8gzX3w9XHoqtg4aeeZtz5uBgd3q2YdG9RiRkTMJ4YHT5TzQSFJy+FCuV4SP4SaU/Zv5Q/grZTsMcBal1tziu3xnuYH5vJmvFXXDPwUiJ6da+oUYf7D+wsqlL8/KDyiRPg2VX+E9rIoNe2J56MWjUoqoa/45Y7TaND8zN9fxTw6bgU9W9Yre5JpLaR9KtvoETe6lIprc5IV54PWx test-agent@nmssh`;
+      const originalPublicKey = publicKeySSH.split(' ')[1];
+
+      // Decode the SSH wire format public key
+      const keyBytes = forge.util.decode64(originalPublicKey);
+      let offset = 0;
+
+      // Read algorithm name length (4 bytes)
+      const algLen =
+        (keyBytes.charCodeAt(offset) << 24) |
+        (keyBytes.charCodeAt(offset + 1) << 16) |
+        (keyBytes.charCodeAt(offset + 2) << 8) |
+        keyBytes.charCodeAt(offset + 3);
+      offset += 4;
+
+      // Skip algorithm name ("ssh-rsa")
+      offset += algLen;
+
+      // Read e length and value
+      const eLen =
+        (keyBytes.charCodeAt(offset) << 24) |
+        (keyBytes.charCodeAt(offset + 1) << 16) |
+        (keyBytes.charCodeAt(offset + 2) << 8) |
+        keyBytes.charCodeAt(offset + 3);
+      offset += 4;
+      const e = keyBytes.substring(offset, offset + eLen);
+      offset += eLen;
+
+      // Read n length and value
+      const nLen =
+        (keyBytes.charCodeAt(offset) << 24) |
+        (keyBytes.charCodeAt(offset + 1) << 16) |
+        (keyBytes.charCodeAt(offset + 2) << 8) |
+        keyBytes.charCodeAt(offset + 3);
+      offset += 4;
+      const n = keyBytes.substring(offset, offset + nLen);
+
+      // Reassemble with rsa-sha2-256
+      const newAlg = 'rsa-sha2-256';
+      const newAlgLen = newAlg.length;
+
+      let newKey = '';
+      // Algorithm length (4 bytes)
+      newKey += String.fromCharCode((newAlgLen >>> 24) & 0xff);
+      newKey += String.fromCharCode((newAlgLen >>> 16) & 0xff);
+      newKey += String.fromCharCode((newAlgLen >>> 8) & 0xff);
+      newKey += String.fromCharCode(newAlgLen & 0xff);
+      // Algorithm name
+      newKey += newAlg;
+      // e length (4 bytes)
+      newKey += String.fromCharCode((eLen >>> 24) & 0xff);
+      newKey += String.fromCharCode((eLen >>> 16) & 0xff);
+      newKey += String.fromCharCode((eLen >>> 8) & 0xff);
+      newKey += String.fromCharCode(eLen & 0xff);
+      // e value
+      newKey += e;
+      // n length (4 bytes)
+      newKey += String.fromCharCode((nLen >>> 24) & 0xff);
+      newKey += String.fromCharCode((nLen >>> 16) & 0xff);
+      newKey += String.fromCharCode((nLen >>> 8) & 0xff);
+      newKey += String.fromCharCode(nLen & 0xff);
+      // n value
+      newKey += n;
+
+      const publicKey = forge.util.encode64(newKey);
+
+      const privateKeyPem = `-----BEGIN RSA PRIVATE KEY-----
+MIIEowIBAAKCAQEAv17pUAUNprNrAPtECHuVz1nZhg6m+aAcwYzgxVEDyHRfXrUU
+ZRH0EA0uvmBmopT/xflhjFjdzr1hwU1cBF5MUsz3NKnxubKnankH/9Uk75DfiPfE
+lmCGihJL9CFXuXkwDK/GrQPIM198PVx6KrYOGnnmbc+bgYHd6tmHRvUYkZEzCeGB
+0+U80EhScvhQrleEj+EmlP2b+UP4K2U7DHAWpdbc4rt8Z7mB+byZrxV1wz8FIien
+WvqFGH+w/sLKpS/Pyg8okT4NlV/hPayKDXtieejFo1KKqGv+OWO02jQ/MzfX8U8O
+m4FPVvWK3uSaS2kfSrb6BE3upSKa3OSFeeD1sQIDAQABAoIBAAiXPCYJdAltuHn8
+zZsL4TfDss4fzkMaeu/9YQG6l07iWn2n51h6K9ikntqQ/UqDIdBDV6uzOZHUUpUY
+4e6YRRjadqZ4ko9hg7513HQRn2zZtg8yADM39hIwrBQzgvqihBOtuF9/8fbMbIlc
+o2dTcOKjYkK/tR1lNQ8b4MTAr++o3xGcKXtnVkQdQSDYvV5CL1lwzer2Vq5hmxXF
+f/VMcbLgZc3yGqywcKKaP6AUTolcQQryVJ0T5epUbLBFGLinHXCjy1KWMrfAnySE
+buPF0yJmSzbx/AKu+5+KpkjjhReprcswVW/ogGOUoz9y30GCTtkcQvG12T2EvxwY
+8et1JzkCgYEA7tVspyFilW8EmT5WF+n5ntUE6N8MmL0co9DazxHB3fvehHPW86GI
+GR9hqAZGnLcPtoD2LArYEXuCVcebL/maTR9wDt3UZZQK4SzKNkr0xnMfH/GJ5GpX
+cnHYLZHcP9v1f9G2jvA5ON+8+mJuv0nVxVYR0SjgEzPBSKqSIAF88k8CgYEAzSAp
+Z1o0iuL1pjo202TczOBDf1c/Anno5hJw3NslWJIekrQqRE+UqovKTd4RRjG07Zb6
+38fS1TmWltkFwYBDtSgqJ5cWWxZygffcSaXsKjDHaxy1bDtiIyQbHo5SQYs6Nkkt
+lstPBezzZuKbNf3I7AS7x2bu59qrk+guBbfRl/8CgYBr0am1YZrxvyaiT8PqE9R+
+4cfPoTI8mdMeGSFOrcOJhTUVMn5tihS40rPxeLPT98h+KYX4qASXD9ztAKmMZPBF
+tNWPwJEsMkMfGGtJS1lpZXs9nnsTxPYpUj+3gsudgJ050ODLcqNCi67ykhFRBfId
+nhd5ByzxPkIZnfdNv546fQKBgQCU0+b2g+5nbrCIwOgSjLXfOEAA3o5q/4TJmUum
+EqKQFsRz8KBSG+NjsjVANgUWhu4dDFRNlTAVYMkv/Zo9gRCfGdssCmVABZNjVTDR
+hr9JBUdLIfNH6fYURRggHWb1A01jIckgBbb6N6eKWJQAonfrNqv/y2E/e9rNX8I0
+h+BchQKBgFkO4+5fL/7sB2EG9VBw1AaQwM2esO07Zv0emOYojXqVKShAL2xD7dw1
+HYI/V6f7UiJ+EL+LJUjkPYx0GLU1hO24xZlK3TjVzYLuEGxtRVLvT9hOx26s28cE
+gQT51sWj0C7S5tkmVWqRbuKLPLNTa4IW+Ls30yReijz95DWMHf0X
+-----END RSA PRIVATE KEY-----`;
+
+      const testPrivateKey = forge.pki.privateKeyFromPem(privateKeyPem);
+
+      const signCallback = async data => {
+        const rawData = forge.util.decode64(data);
+        const md = forge.md.sha256.create();
+        md.update(rawData);
+        const signature = testPrivateKey.sign(md);
+        return forge.util.encode64(signature);
+      };
+
+      const client = await SSHClient.connect(HOST, PORT, 'user');
+      await client.authenticateWithSignCallback(publicKey, signCallback);
+      setStatus('RSA 2048 SHA256 Sign Callback Connected!');
+      client.disconnect();
+    } catch (error) {
+      setStatus(`RSA 2048 SHA256 Sign Callback Failed: ${error.message}`);
+    }
+  };
+
   const testRSA4096SignCallback = async () => {
     setStatus('Testing RSA 4096 Sign Callback...');
     try {
@@ -471,60 +597,71 @@ YyVRAgEBoUQDQgAEuF2vHuBJBPBgEBhnOmdpBXqo/hZmuFvrFIZGSoHzWFeCqJET
 
       // Extract the 32-byte private key using our utility
       const privateKeyBytes = extractP256PrivateKey(privateKeyPem);
-      
+
       const EC = elliptic.ec;
       const ec = new EC('p256');
       const keyPair = ec.keyFromPrivate(privateKeyBytes);
 
       const signCallback = async data => {
-        console.log('ECDSA P-256 sign callback called with data length:', forge.util.decode64(data).length);
+        console.log(
+          'ECDSA P-256 sign callback called with data length:',
+          forge.util.decode64(data).length,
+        );
         try {
           const rawData = forge.util.decode64(data);
           const hash = forge.md.sha256.create();
           hash.update(rawData);
           const hashBytes = hash.digest().getBytes();
-          
+
           // Sign with ECDSA
-          const signature = keyPair.sign(forge.util.bytesToHex(hashBytes), 'hex');
-          
+          const signature = keyPair.sign(
+            forge.util.bytesToHex(hashBytes),
+            'hex',
+          );
+
           // Convert to SSH wire format
           const r = signature.r.toArray('be', 32);
           const s = signature.s.toArray('be', 32);
-          
+
           // Create SSH wire format signature manually
           const sshSignature = new Uint8Array(74); // 4 + 1 + 32 + 4 + 1 + 32 = 74
           let offset = 0;
-          
+
           // r length (33 bytes)
           sshSignature[offset++] = 0x00;
           sshSignature[offset++] = 0x00;
           sshSignature[offset++] = 0x00;
           sshSignature[offset++] = 0x21;
-          
+
           // leading zero for r
           sshSignature[offset++] = 0x00;
-          
+
           // r component (32 bytes)
           for (let i = 0; i < 32; i++) {
             sshSignature[offset++] = r[i];
           }
-          
+
           // s length (33 bytes)
           sshSignature[offset++] = 0x00;
           sshSignature[offset++] = 0x00;
           sshSignature[offset++] = 0x00;
           sshSignature[offset++] = 0x21;
-          
+
           // leading zero for s
           sshSignature[offset++] = 0x00;
-          
+
           // s component (32 bytes)
           for (let i = 0; i < 32; i++) {
             sshSignature[offset++] = s[i];
           }
-          
-          console.log('ECDSA P-256 signature generated, length:', sshSignature.length);
-          return forge.util.encode64(forge.util.binary.raw.encode(sshSignature));
+
+          console.log(
+            'ECDSA P-256 signature generated, length:',
+            sshSignature.length,
+          );
+          return forge.util.encode64(
+            forge.util.binary.raw.encode(sshSignature),
+          );
         } catch (error) {
           console.error('ECDSA P-256 signing error:', error);
           throw error;
@@ -556,24 +693,27 @@ AAAEBGkrNpCuJt+TTQgwXlYGp9rjCS+WmPK+H0fwXDZBtuRhWVSpConE3qgn9svoFIW71w
 
       // Extract the 32-byte private key seed using our utility
       const privateKeySeed = extractEd25519PrivateKey(privateKeyOpenSSH);
-      
+
       // Generate the full key pair from the seed
       const keyPair = nacl.sign.keyPair.fromSeed(privateKeySeed);
-      
+
       const signCallback = async data => {
-        console.log('Ed25519 sign callback called with data length:', forge.util.decode64(data).length);
+        console.log(
+          'Ed25519 sign callback called with data length:',
+          forge.util.decode64(data).length,
+        );
         try {
           const rawData = forge.util.decode64(data);
-          
+
           // Convert message to Uint8Array
           const messageArray = new Uint8Array(rawData.length);
           for (let i = 0; i < rawData.length; i++) {
             messageArray[i] = rawData.charCodeAt(i);
           }
-          
+
           // Sign with Ed25519 using the full secret key (64 bytes)
           const signature = nacl.sign.detached(messageArray, keyPair.secretKey);
-          
+
           console.log('Ed25519 signature generated, length:', signature.length);
           // Convert signature to base64
           return naclUtil.encodeBase64(signature);
@@ -701,6 +841,13 @@ xpWXeGkW2vnB3XpTAAAAFXVuYXV0aG9yaXplZEB0ZXN0LmNvbQECAwQF
           testID="sign-callback-button"
         >
           <Text style={styles.buttonText}>RSA 2048 Sign</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.button}
+          onPress={testRSA2048SHA256SignCallback}
+          testID="rsa2048-sha256-sign-callback-button"
+        >
+          <Text style={styles.buttonText}>RSA 2048 SHA256 Sign</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.button}

@@ -27,13 +27,97 @@ export var PtyType;
     PtyType["XTERM"] = "xterm";
 })(PtyType || (PtyType = {}));
 /**
- * Creates an enhanced error object with errno if available
+ * SSH error codes based on libssh2 and JSch error constants
+ */
+export var SSHErrorCode;
+(function (SSHErrorCode) {
+    // Success
+    SSHErrorCode[SSHErrorCode["SSH_OK"] = 0] = "SSH_OK";
+    // Connection errors (libssh2)
+    SSHErrorCode[SSHErrorCode["SSH_SOCKET_NONE"] = -1] = "SSH_SOCKET_NONE";
+    SSHErrorCode[SSHErrorCode["SSH_BANNER_RECV"] = -2] = "SSH_BANNER_RECV";
+    SSHErrorCode[SSHErrorCode["SSH_BANNER_SEND"] = -3] = "SSH_BANNER_SEND";
+    SSHErrorCode[SSHErrorCode["SSH_INVALID_MAC"] = -4] = "SSH_INVALID_MAC";
+    SSHErrorCode[SSHErrorCode["SSH_KEX_FAILURE"] = -5] = "SSH_KEX_FAILURE";
+    SSHErrorCode[SSHErrorCode["SSH_ALLOC"] = -6] = "SSH_ALLOC";
+    SSHErrorCode[SSHErrorCode["SSH_SOCKET_SEND"] = -7] = "SSH_SOCKET_SEND";
+    SSHErrorCode[SSHErrorCode["SSH_KEY_EXCHANGE_FAILURE"] = -8] = "SSH_KEY_EXCHANGE_FAILURE";
+    SSHErrorCode[SSHErrorCode["SSH_TIMEOUT"] = -9] = "SSH_TIMEOUT";
+    SSHErrorCode[SSHErrorCode["SSH_HOSTKEY_INIT"] = -10] = "SSH_HOSTKEY_INIT";
+    SSHErrorCode[SSHErrorCode["SSH_HOSTKEY_SIGN"] = -11] = "SSH_HOSTKEY_SIGN";
+    SSHErrorCode[SSHErrorCode["SSH_DECRYPT"] = -12] = "SSH_DECRYPT";
+    SSHErrorCode[SSHErrorCode["SSH_SOCKET_DISCONNECT"] = -13] = "SSH_SOCKET_DISCONNECT";
+    SSHErrorCode[SSHErrorCode["SSH_PROTO"] = -14] = "SSH_PROTO";
+    SSHErrorCode[SSHErrorCode["SSH_PASSWORD_EXPIRED"] = -15] = "SSH_PASSWORD_EXPIRED";
+    SSHErrorCode[SSHErrorCode["SSH_FILE"] = -16] = "SSH_FILE";
+    SSHErrorCode[SSHErrorCode["SSH_METHOD_NONE"] = -17] = "SSH_METHOD_NONE";
+    SSHErrorCode[SSHErrorCode["SSH_AUTHENTICATION_FAILED"] = -18] = "SSH_AUTHENTICATION_FAILED";
+    SSHErrorCode[SSHErrorCode["SSH_PUBLICKEY_UNVERIFIED"] = -19] = "SSH_PUBLICKEY_UNVERIFIED";
+    SSHErrorCode[SSHErrorCode["SSH_CHANNEL_OUTOFORDER"] = -20] = "SSH_CHANNEL_OUTOFORDER";
+    SSHErrorCode[SSHErrorCode["SSH_CHANNEL_FAILURE"] = -21] = "SSH_CHANNEL_FAILURE";
+    SSHErrorCode[SSHErrorCode["SSH_CHANNEL_REQUEST_DENIED"] = -22] = "SSH_CHANNEL_REQUEST_DENIED";
+    SSHErrorCode[SSHErrorCode["SSH_CHANNEL_UNKNOWN"] = -23] = "SSH_CHANNEL_UNKNOWN";
+    SSHErrorCode[SSHErrorCode["SSH_CHANNEL_WINDOW_EXCEEDED"] = -24] = "SSH_CHANNEL_WINDOW_EXCEEDED";
+    SSHErrorCode[SSHErrorCode["SSH_CHANNEL_PACKET_EXCEEDED"] = -25] = "SSH_CHANNEL_PACKET_EXCEEDED";
+    SSHErrorCode[SSHErrorCode["SSH_CHANNEL_CLOSED"] = -26] = "SSH_CHANNEL_CLOSED";
+    SSHErrorCode[SSHErrorCode["SSH_CHANNEL_EOF_SENT"] = -27] = "SSH_CHANNEL_EOF_SENT";
+    SSHErrorCode[SSHErrorCode["SSH_SCP_PROTOCOL"] = -28] = "SSH_SCP_PROTOCOL";
+    SSHErrorCode[SSHErrorCode["SSH_ZLIB"] = -29] = "SSH_ZLIB";
+    SSHErrorCode[SSHErrorCode["SSH_SOCKET_TIMEOUT"] = -30] = "SSH_SOCKET_TIMEOUT";
+    SSHErrorCode[SSHErrorCode["SSH_SFTP_PROTOCOL"] = -31] = "SSH_SFTP_PROTOCOL";
+    SSHErrorCode[SSHErrorCode["SSH_REQUEST_DENIED"] = -32] = "SSH_REQUEST_DENIED";
+    SSHErrorCode[SSHErrorCode["SSH_METHOD_NOT_SUPPORTED"] = -33] = "SSH_METHOD_NOT_SUPPORTED";
+    SSHErrorCode[SSHErrorCode["SSH_INVAL"] = -34] = "SSH_INVAL";
+    SSHErrorCode[SSHErrorCode["SSH_INVALID_POLL_TYPE"] = -35] = "SSH_INVALID_POLL_TYPE";
+    SSHErrorCode[SSHErrorCode["SSH_PUBLICKEY_PROTOCOL"] = -36] = "SSH_PUBLICKEY_PROTOCOL";
+    SSHErrorCode[SSHErrorCode["SSH_EAGAIN"] = -37] = "SSH_EAGAIN";
+    SSHErrorCode[SSHErrorCode["SSH_BUFFER_TOO_SMALL"] = -38] = "SSH_BUFFER_TOO_SMALL";
+    SSHErrorCode[SSHErrorCode["SSH_BAD_USE"] = -39] = "SSH_BAD_USE";
+    SSHErrorCode[SSHErrorCode["SSH_COMPRESS"] = -40] = "SSH_COMPRESS";
+    SSHErrorCode[SSHErrorCode["SSH_OUT_OF_BOUNDARY"] = -41] = "SSH_OUT_OF_BOUNDARY";
+    SSHErrorCode[SSHErrorCode["SSH_AGENT_PROTOCOL"] = -42] = "SSH_AGENT_PROTOCOL";
+    SSHErrorCode[SSHErrorCode["SSH_SOCKET_RECV"] = -43] = "SSH_SOCKET_RECV";
+    SSHErrorCode[SSHErrorCode["SSH_ENCRYPT"] = -44] = "SSH_ENCRYPT";
+    SSHErrorCode[SSHErrorCode["SSH_BAD_SOCKET"] = -45] = "SSH_BAD_SOCKET";
+    SSHErrorCode[SSHErrorCode["SSH_KNOWN_HOSTS"] = -46] = "SSH_KNOWN_HOSTS";
+    SSHErrorCode[SSHErrorCode["SSH_CHANNEL_WINDOW_FULL"] = -47] = "SSH_CHANNEL_WINDOW_FULL";
+    SSHErrorCode[SSHErrorCode["SSH_KEYFILE_AUTH_FAILED"] = -48] = "SSH_KEYFILE_AUTH_FAILED";
+    SSHErrorCode[SSHErrorCode["SSH_RANDGEN"] = -49] = "SSH_RANDGEN";
+    SSHErrorCode[SSHErrorCode["SSH_MISSING_USERAUTH_BANNER"] = -50] = "SSH_MISSING_USERAUTH_BANNER";
+    SSHErrorCode[SSHErrorCode["SSH_ALGO_UNSUPPORTED"] = -51] = "SSH_ALGO_UNSUPPORTED";
+    // SFTP errors (libssh2)
+    SSHErrorCode[SSHErrorCode["SFTP_EOF"] = 1] = "SFTP_EOF";
+    SSHErrorCode[SSHErrorCode["SFTP_NO_SUCH_FILE"] = 2] = "SFTP_NO_SUCH_FILE";
+    SSHErrorCode[SSHErrorCode["SFTP_PERMISSION_DENIED"] = 3] = "SFTP_PERMISSION_DENIED";
+    SSHErrorCode[SSHErrorCode["SFTP_FAILURE"] = 4] = "SFTP_FAILURE";
+    SSHErrorCode[SSHErrorCode["SFTP_BAD_MESSAGE"] = 5] = "SFTP_BAD_MESSAGE";
+    SSHErrorCode[SSHErrorCode["SFTP_NO_CONNECTION"] = 6] = "SFTP_NO_CONNECTION";
+    SSHErrorCode[SSHErrorCode["SFTP_CONNECTION_LOST"] = 7] = "SFTP_CONNECTION_LOST";
+    SSHErrorCode[SSHErrorCode["SFTP_OP_UNSUPPORTED"] = 8] = "SFTP_OP_UNSUPPORTED";
+    SSHErrorCode[SSHErrorCode["SFTP_INVALID_HANDLE"] = 9] = "SFTP_INVALID_HANDLE";
+    SSHErrorCode[SSHErrorCode["SFTP_NO_SUCH_PATH"] = 10] = "SFTP_NO_SUCH_PATH";
+    SSHErrorCode[SSHErrorCode["SFTP_FILE_ALREADY_EXISTS"] = 11] = "SFTP_FILE_ALREADY_EXISTS";
+    SSHErrorCode[SSHErrorCode["SFTP_WRITE_PROTECT"] = 12] = "SFTP_WRITE_PROTECT";
+    SSHErrorCode[SSHErrorCode["SFTP_NO_MEDIA"] = 13] = "SFTP_NO_MEDIA";
+    SSHErrorCode[SSHErrorCode["SFTP_NO_SPACE_ON_FILESYSTEM"] = 14] = "SFTP_NO_SPACE_ON_FILESYSTEM";
+    SSHErrorCode[SSHErrorCode["SFTP_QUOTA_EXCEEDED"] = 15] = "SFTP_QUOTA_EXCEEDED";
+    SSHErrorCode[SSHErrorCode["SFTP_UNKNOWN_PRINCIPAL"] = 16] = "SFTP_UNKNOWN_PRINCIPAL";
+    SSHErrorCode[SSHErrorCode["SFTP_LOCK_CONFLICT"] = 17] = "SFTP_LOCK_CONFLICT";
+    SSHErrorCode[SSHErrorCode["SFTP_DIR_NOT_EMPTY"] = 18] = "SFTP_DIR_NOT_EMPTY";
+    SSHErrorCode[SSHErrorCode["SFTP_NOT_A_DIRECTORY"] = 19] = "SFTP_NOT_A_DIRECTORY";
+    SSHErrorCode[SSHErrorCode["SFTP_INVALID_FILENAME"] = 20] = "SFTP_INVALID_FILENAME";
+    SSHErrorCode[SSHErrorCode["SFTP_LINK_LOOP"] = 21] = "SFTP_LINK_LOOP";
+})(SSHErrorCode || (SSHErrorCode = {}));
+/**
+ * Creates an enhanced error object with errno and code if available
  */
 function createSSHError(error) {
+    var _a;
     if (typeof error === 'object' && error !== null) {
         if (error.message && typeof error.errno === 'number') {
             const sshError = new Error(error.message);
             sshError.errno = error.errno;
+            sshError.code = (_a = SSHErrorCode[error.errno]) !== null && _a !== void 0 ? _a : 'UNKNOWN_ERROR';
             return sshError;
         }
     }

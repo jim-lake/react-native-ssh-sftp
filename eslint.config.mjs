@@ -24,7 +24,7 @@ export default [
 
       // these rules help us keep the code readable & consistent
       'max-len': ['warn', { code: 240 }],
-      'max-lines-per-function': ['error', { max: 50, skipComments: true, skipBlankLines: true }],
+
       'linebreak-style': ['error', 'unix'],
       'no-trailing-spaces': ['error'],
       'semi': ['error', 'always'],

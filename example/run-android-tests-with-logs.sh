@@ -5,13 +5,16 @@ cd "$(dirname "$0")"
 
 # Cleanup function
 cleanup() {
+    echo "Cleaning up..."
+    # Kill any running adb logcat processes
+    pkill -f "adb logcat" 2>/dev/null || true
     if [ ! -z "$LOGCAT_PID" ]; then
         kill $LOGCAT_PID 2>/dev/null || true
     fi
 }
 
 # Always cleanup on exit
-trap cleanup EXIT
+trap cleanup EXIT INT TERM
 
 echo "Starting SSH test server..."
 cd tests
@@ -39,6 +42,9 @@ echo "Running tests..."
 
 # Give logs time to flush
 sleep 3
+
+# Explicitly cleanup before stopping server
+cleanup
 
 echo "Stopping SSH test server..."
 cd ../tests

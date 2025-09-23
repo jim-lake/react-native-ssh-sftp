@@ -1,5 +1,4 @@
 #!/bin/bash
-set -e
 
 cd "$(dirname "$0")"
 
@@ -66,13 +65,20 @@ sleep 5
 
 # Test SSH connectivity before running tests
 echo "Testing SSH connectivity..."
-SSH_TEST_OUTPUT=$(ssh -i ssh-keys/id_rsa_nopass -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o PasswordAuthentication=no user@127.0.0.1 "echo 'SSH test successful'" 2>&1)
-if [[ "$SSH_TEST_OUTPUT" != *"SSH test successful"* ]]; then
-    echo "SSH connectivity test failed:"
-    echo "$SSH_TEST_OUTPUT"
-    echo "Checking server logs..."
-    docker logs nmssh-test-ssh | tail -20
-    exit 1
-fi
-echo "SSH connectivity test passed"
+for i in {1..10}; do
+    SSH_TEST_OUTPUT=$(ssh -i ssh-keys/id_rsa_nopass -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -o PasswordAuthentication=no user@127.0.0.1 "echo 'SSH test successful'" 2>&1)
+    if [[ "$SSH_TEST_OUTPUT" == *"SSH test successful"* ]]; then
+        echo "SSH connectivity test passed"
+        break
+    fi
+    if [ $i -eq 10 ]; then
+        echo "SSH connectivity test failed after 10 attempts:"
+        echo "$SSH_TEST_OUTPUT"
+        echo "Checking server logs..."
+        docker logs nmssh-test-ssh | tail -20
+        exit 1
+    fi
+    echo "SSH test attempt $i failed, retrying in 2 seconds..."
+    sleep 2
+done
 

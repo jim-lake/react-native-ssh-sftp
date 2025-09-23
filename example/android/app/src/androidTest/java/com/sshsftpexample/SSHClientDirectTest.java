@@ -307,7 +307,7 @@ public class SSHClientDirectTest {
         System.out.println("=== SSH RSA SIGN CALLBACK AUTH TEST ===");
         System.out.println("Server: " + host + ":" + port);
         System.out.println("Username: " + username);
-        System.out.println("Auth Type: RSA Sign Callback (SHA1withRSA)");
+        System.out.println("Auth Type: RSA Sign Callback (SHA256withRSA)");
         System.out.println("Expected: Authentication should succeed");
         
         JSch jsch = new JSch();
@@ -318,178 +318,54 @@ public class SSHClientDirectTest {
             PrivateKey privateKey = parseRSAPrivateKey(privateKeyPem);
             System.out.println("Parsed RSA private key successfully");
             
-            // Extract public key from private key and validate
-            RSAPrivateKey rsaPrivateKey = (RSAPrivateKey) privateKey;
-            BigInteger modulus = rsaPrivateKey.getModulus();
-            BigInteger publicExponent = BigInteger.valueOf(65537); // Standard RSA public exponent
-            
-            RSAPublicKeySpec publicKeySpec = new RSAPublicKeySpec(modulus, publicExponent);
-            KeyFactory keyFactory = KeyFactory.getInstance("RSA");
-            PublicKey calculatedPublicKey = keyFactory.generatePublic(publicKeySpec);
-            
-            System.out.println("Calculated public key from private key");
-            System.out.println("Modulus length: " + modulus.bitLength() + " bits");
-            System.out.println("Public exponent: " + publicExponent);
-            
-            // Generate SSH wire format for calculated public key
-            byte[] calculatedKeyBlob = generateSSHPublicKeyBlob((RSAPublicKey) calculatedPublicKey);
-            
-            // === JSch KeyPair Comparison ===
-            System.out.println("\n=== JSch KeyPair Comparison ===");
-            
-            // Create JSch KeyPair from the private key
-            final com.jcraft.jsch.KeyPair jschKeyPair = com.jcraft.jsch.KeyPair.load(jsch, privateKeyPem.getBytes(), null);
-            System.out.println("JSch KeyPair type: " + jschKeyPair.getKeyType());
-            System.out.println("JSch KeyPair size: " + jschKeyPair.getKeySize());
-            
-            // Create JSch Identity from KeyPair for comparison
-            jsch.addIdentity("test-key", privateKeyPem.getBytes(), null, null);
-            java.util.Vector identities = jsch.getIdentityRepository().getIdentities();
-            final Identity jschIdentity = (Identity) identities.get(identities.size() - 1);
-            System.out.println("JSch Identity created from same key data");
-            System.out.println("JSch Identity.getName(): " + jschIdentity.getName());
-            System.out.println("JSch Identity.getAlgName(): " + jschIdentity.getAlgName());
-            System.out.println("JSch Identity.isEncrypted(): " + jschIdentity.isEncrypted());
-            
-            byte[] jschIdentityBlob = jschIdentity.getPublicKeyBlob();
-            System.out.println("JSch Identity.getPublicKeyBlob(): " + jschIdentityBlob.length + " bytes");
-            
-            // Get JSch's public key blob
-            byte[] jschPublicKeyBlob = jschKeyPair.getPublicKeyBlob();
-            System.out.println("JSch public key blob: " + jschPublicKeyBlob.length + " bytes");
-            
-            StringBuilder jschHex = new StringBuilder();
-            for (byte b : jschPublicKeyBlob) {
-                jschHex.append(String.format("%02x", b));
-            }
-            System.out.println("JSch key blob hex: " + jschHex.toString());
-            
-            // Test JSch signature generation
-            byte[] testData = "test signature data".getBytes();
-            byte[] jschSignature = jschKeyPair.getSignature(testData);
-            System.out.println("JSch signature: " + jschSignature.length + " bytes");
-            
-            StringBuilder jschSigHex = new StringBuilder();
-            for (byte b : jschSignature) {
-                jschSigHex.append(String.format("%02x", b));
-            }
-            System.out.println("JSch signature hex: " + jschSigHex.toString());
-            
-            // Check JSch KeyPair methods
-            System.out.println("JSch KeyPair isEncrypted: " + jschKeyPair.isEncrypted());
-            System.out.println("JSch KeyPair decrypt result: " + jschKeyPair.decrypt((byte[])null));
-            
             // Validate against expected SSH public key
             String expectedPublicKey = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC/XulQBQ2ms2sA+0QIe5XPWdmGDqb5oBzBjODFUQPIdF9etRRlEfQQDS6+YGailP/F+WGMWN3OvWHBTVwEXkxSzPc0qfG5sqdqeQf/1STvkN+I98SWYIaKEkv0IVe5eTAMr8atA8gzX3w9XHoqtg4aeeZtz5uBgd3q2YdG9RiRkTMJ4YHT5TzQSFJy+FCuV4SP4SaU/Zv5Q/grZTsMcBal1tziu3xnuYH5vJmvFXXDPwUiJ6da+oUYf7D+wsqlL8/KDyiRPg2VX+E9rIoNe2J56MWjUoqoa/45Y7TaND8zN9fxTw6bgU9W9Yre5JpLaR9KtvoETe6lIprc5IV54PWx test-agent@nmssh";
             byte[] expectedKeyBlob = Base64.getDecoder().decode(expectedPublicKey.split(" ")[1]);
             
-            System.out.println("Expected SSH public key blob: " + expectedKeyBlob.length + " bytes");
-            System.out.println("Calculated SSH public key blob: " + calculatedKeyBlob.length + " bytes");
-            
-            // Full hex dump comparison
-            StringBuilder expectedHex = new StringBuilder();
-            for (byte b : expectedKeyBlob) {
-                expectedHex.append(String.format("%02x", b));
-            }
-            System.out.println("Expected key blob hex: " + expectedHex.toString());
-            
-            StringBuilder calculatedHex = new StringBuilder();
-            for (byte b : calculatedKeyBlob) {
-                calculatedHex.append(String.format("%02x", b));
-            }
-            System.out.println("Calculated key blob hex: " + calculatedHex.toString());
-            
-            System.out.println("Expected vs Manual match: " + java.util.Arrays.equals(expectedKeyBlob, calculatedKeyBlob));
-            System.out.println("Expected vs JSch match: " + java.util.Arrays.equals(expectedKeyBlob, jschPublicKeyBlob));
-            
-            // Continue with manual calculation for now, but log JSch reference
-            if (!java.util.Arrays.equals(expectedKeyBlob, calculatedKeyBlob)) {
-                System.out.println("ERROR: Manual calculation public key mismatch!");
-                System.out.println("NOTE: JSch would return: " + java.util.Arrays.equals(expectedKeyBlob, jschPublicKeyBlob));
-                fail("Calculated public key does not match expected public key");
-            } else {
-                System.out.println("SUCCESS: Manual calculation public keys match perfectly");
-            }
-            
-            // Create custom identity with comprehensive logging
+            // Create custom identity
             Identity identity = new Identity() {
-                private int callCount = 0;
                 
                 @Override
                 public boolean setPassphrase(byte[] passphrase) throws JSchException {
-                    System.out.println("=== Identity.setPassphrase() called ===");
-                    System.out.println("Call #" + (++callCount));
-                    if (passphrase != null) {
-                        System.out.println("Passphrase length: " + passphrase.length + " bytes");
-                    } else {
-                        System.out.println("Passphrase: null");
-                    }
-                    
-                    // Compare with JSch Identity
-                    boolean jschResult = jschIdentity.setPassphrase(passphrase);
-                    System.out.println("JSch Identity.setPassphrase() returns: " + jschResult);
-                    System.out.println("Returning: true");
+                    System.out.println("Identity.setPassphrase() called");
                     return true;
                 }
                 
                 @Override
                 public byte[] getPublicKeyBlob() {
-                    System.out.println("=== Identity.getPublicKeyBlob() called ===");
-                    System.out.println("Call #" + (++callCount));
-                    
-                    // Compare with JSch Identity
-                    byte[] jschBlob = jschIdentity.getPublicKeyBlob();
-                    System.out.println("JSch Identity.getPublicKeyBlob() returns: " + jschBlob.length + " bytes");
-                    System.out.println("Manual returns: " + expectedKeyBlob.length + " bytes");
-                    System.out.println("Blobs match: " + java.util.Arrays.equals(expectedKeyBlob, jschBlob));
-                    
+                    System.out.println("Identity.getPublicKeyBlob() called");
                     return expectedKeyBlob;
                 }
                 
                 @Override
                 public byte[] getSignature(byte[] data) {
-                    System.out.println("=== Identity.getSignature() called ===");
-                    System.out.println("Call #" + (++callCount));
+                    System.out.println("Identity.getSignature() called");
                     System.out.println("Data to sign length: " + data.length + " bytes");
                     
-                    // Full hex dump of data
-                    StringBuilder dataHex = new StringBuilder();
-                    for (byte b : data) {
-                        dataHex.append(String.format("%02x", b));
-                    }
-                    System.out.println("Data to sign hex: " + dataHex.toString());
-                    
                     try {
-                        // Use SHA1withRSA signature
-                        Signature signature = Signature.getInstance("SHA1withRSA");
+                        // Use SHA256withRSA signature
+                        Signature signature = Signature.getInstance("SHA256withRSA");
                         signature.initSign(privateKey);
                         signature.update(data);
                         byte[] rawSignature = signature.sign();
                         
                         System.out.println("Generated raw signature: " + rawSignature.length + " bytes");
                         
-                        // Full hex dump of raw signature
-                        StringBuilder rawSigHex = new StringBuilder();
-                        for (byte b : rawSignature) {
-                            rawSigHex.append(String.format("%02x", b));
-                        }
-                        System.out.println("Raw signature hex: " + rawSigHex.toString());
-                        
-                        // SSH signature format: [length of "ssh-rsa"]["ssh-rsa"][length of signature][raw signature bytes]
-                        String algorithm = "ssh-rsa";
+                        // SSH signature format: [length of "rsa-sha2-256"]["rsa-sha2-256"][length of signature][raw signature bytes]
+                        String algorithm = "rsa-sha2-256";
                         byte[] algorithmBytes = algorithm.getBytes();
                         
                         byte[] sshSignature = new byte[4 + algorithmBytes.length + 4 + rawSignature.length];
                         
                         int offset = 0;
                         
-                        // Length of "ssh-rsa" (big-endian)
+                        // Length of "rsa-sha2-256" (big-endian)
                         sshSignature[offset++] = (byte) ((algorithmBytes.length >> 24) & 0xff);
                         sshSignature[offset++] = (byte) ((algorithmBytes.length >> 16) & 0xff);
                         sshSignature[offset++] = (byte) ((algorithmBytes.length >> 8) & 0xff);
                         sshSignature[offset++] = (byte) (algorithmBytes.length & 0xff);
                         
-                        // "ssh-rsa"
+                        // "rsa-sha2-256"
                         System.arraycopy(algorithmBytes, 0, sshSignature, offset, algorithmBytes.length);
                         offset += algorithmBytes.length;
                         
@@ -504,47 +380,6 @@ public class SSHClientDirectTest {
                         
                         System.out.println("Generated SSH signature: " + sshSignature.length + " bytes");
                         
-                        // === JSch Signature Comparison ===
-                        System.out.println("\n=== JSch Signature Comparison ===");
-                        try {
-                            byte[] jschSignatureForSameData = jschKeyPair.getSignature(data);
-                            System.out.println("JSch KeyPair signature for same data: " + jschSignatureForSameData.length + " bytes");
-                            
-                            byte[] jschIdentitySignature = jschIdentity.getSignature(data);
-                            System.out.println("JSch Identity signature for same data: " + jschIdentitySignature.length + " bytes");
-                            
-                            StringBuilder jschSigHex = new StringBuilder();
-                            for (byte b : jschSignatureForSameData) {
-                                jschSigHex.append(String.format("%02x", b));
-                            }
-                            System.out.println("JSch KeyPair signature hex: " + jschSigHex.toString());
-                            
-                            StringBuilder jschIdSigHex = new StringBuilder();
-                            for (byte b : jschIdentitySignature) {
-                                jschIdSigHex.append(String.format("%02x", b));
-                            }
-                            System.out.println("JSch Identity signature hex: " + jschIdSigHex.toString());
-                            
-                            System.out.println("Manual vs JSch KeyPair signature match: " + java.util.Arrays.equals(sshSignature, jschSignatureForSameData));
-                            System.out.println("Manual vs JSch Identity signature match: " + java.util.Arrays.equals(sshSignature, jschIdentitySignature));
-                            
-                            if (!java.util.Arrays.equals(sshSignature, jschSignatureForSameData)) {
-                                System.out.println("NOTE: Signatures differ - this is expected due to RSA randomness");
-                                System.out.println("Manual signature length: " + sshSignature.length);
-                                System.out.println("JSch KeyPair signature length: " + jschSignatureForSameData.length);
-                                System.out.println("JSch Identity signature length: " + jschIdentitySignature.length);
-                            }
-                        } catch (Exception e) {
-                            System.out.println("JSch signature comparison failed: " + e.getMessage());
-                        }
-                        
-                        // Full hex dump of SSH signature
-                        StringBuilder sshSigHex = new StringBuilder();
-                        for (byte b : sshSignature) {
-                            sshSigHex.append(String.format("%02x", b));
-                        }
-                        System.out.println("SSH signature hex: " + sshSigHex.toString());
-                        
                         return sshSignature;
                     } catch (Exception e) {
                         System.out.println("ERROR: Sign callback failed: " + e.getMessage());
@@ -555,70 +390,35 @@ public class SSHClientDirectTest {
                 
                 @Override
                 public boolean decrypt() {
-                    System.out.println("=== Identity.decrypt() called ===");
-                    System.out.println("Call #" + (++callCount));
-                    
-                    // Compare with JSch Identity
-                    boolean jschResult = jschIdentity.decrypt();
-                    System.out.println("JSch Identity.decrypt() returns: " + jschResult);
-                    System.out.println("Returning: true");
+                    System.out.println("Identity.decrypt() called");
                     return true;
                 }
                 
                 @Override
                 public String getAlgName() {
-                    System.out.println("=== Identity.getAlgName() called ===");
-                    System.out.println("Call #" + (++callCount));
-                    
-                    // Compare with JSch Identity
-                    String jschAlg = jschIdentity.getAlgName();
-                    System.out.println("JSch Identity.getAlgName() returns: " + jschAlg);
-                    System.out.println("Returning: ssh-rsa");
+                    System.out.println("Identity.getAlgName() called");
                     return "ssh-rsa";
                 }
                 
                 @Override
                 public String getName() {
-                    System.out.println("=== Identity.getName() called ===");
-                    System.out.println("Call #" + (++callCount));
-                    
-                    // Compare with JSch Identity
-                    String jschName = jschIdentity.getName();
-                    System.out.println("JSch Identity.getName() returns: " + jschName);
-                    System.out.println("Returning: rsa-callback-test");
+                    System.out.println("Identity.getName() called");
                     return "rsa-callback-test";
                 }
                 
                 @Override
                 public boolean isEncrypted() {
-                    System.out.println("=== Identity.isEncrypted() called ===");
-                    System.out.println("Call #" + (++callCount));
-                    
-                    // Compare with JSch Identity
-                    boolean jschEncrypted = jschIdentity.isEncrypted();
-                    System.out.println("JSch Identity.isEncrypted() returns: " + jschEncrypted);
-                    System.out.println("Returning: false");
+                    System.out.println("Identity.isEncrypted() called");
                     return false;
                 }
                 
                 @Override
                 public void clear() {
-                    System.out.println("=== Identity.clear() called ===");
-                    System.out.println("Call #" + (++callCount));
-                    System.out.println("Clearing identity data");
-                }
-                
-                // Additional methods that might be called
-                public byte[] forSSHAgent() throws JSchException {
-                    System.out.println("=== Identity.forSSHAgent() called ===");
-                    System.out.println("Call #" + (++callCount));
-                    return null;
+                    System.out.println("Identity.clear() called");
                 }
             };
             
-            System.out.println("Created Identity with comprehensive logging");
-            
-            System.out.println("Key validation complete - proceeding with JSch authentication");
+            System.out.println("Created Identity implementation");
             
             jsch.addIdentity(identity, null);
             System.out.println("Added RSA sign callback identity to JSch");

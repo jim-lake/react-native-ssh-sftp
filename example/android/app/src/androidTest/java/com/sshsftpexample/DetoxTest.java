@@ -126,14 +126,8 @@ public class DetoxTest {
         if (rsaText.exists()) {
             System.out.println("Found RSA text: " + rsaText.getText());
         }
-        
-        // The test should pass if we got this far - the native code is working
-        // even if the SSH connection fails due to network issues
-        System.out.println("Test completed - checking if RSA authentication was attempted");
-        
-        // For now, we'll consider the test successful if the button was clicked
-        // and we didn't crash - this means the native code is at least functional
-        assert(true);
+
+        assert(successText.exists());
     }
 
     // @Test

@@ -206,14 +206,19 @@ public class RNSshClientModule extends ReactContextBaseJavaModule {
             // Disconnect current session
             client._session.disconnect();
             
-            // Create new session with key authentication
+            // Create new session with key authentication using same pattern as legacy method
             JSch jsch = new JSch();
             
-            byte[] privateKey = keyPairs.getString("privateKey").getBytes();
-            byte[] passphrase = keyPairs.hasKey("passphrase") ? keyPairs.getString("passphrase").getBytes() : null;
+            String privateKeyStr = keyPairs.getString("privateKey");
+            String passphraseStr = keyPairs.hasKey("passphrase") ? keyPairs.getString("passphrase") : null;
             
-            // JSch can work with just the private key - it will derive the public key
-            jsch.addIdentity("default", privateKey, null, passphrase);
+            // Use same encoding as legacy method (default charset)
+            byte[] privateKey = privateKeyStr.getBytes();
+            byte[] publicKey = keyPairs.hasKey("publicKey") ? keyPairs.getString("publicKey").getBytes() : null;
+            byte[] passphrase = passphraseStr != null ? passphraseStr.getBytes() : null;
+            
+            // Add identity to JSch before creating session
+            jsch.addIdentity("default", privateKey, publicKey, passphrase);
             
             Session session = jsch.getSession(username, host, port);
             
@@ -378,6 +383,22 @@ public class RNSshClientModule extends ReactContextBaseJavaModule {
       }
     }).start();
   }
+
+  @ReactMethod
+  public void isAuthenticated(final String key, final Callback callback) {
+    try {
+      SSHClient client = clientPool.get(key);
+      if (client != null && client._session != null && client._session.isConnected()) {
+        callback.invoke(null, true);
+      } else {
+        callback.invoke(null, false);
+      }
+    } catch (Exception error) {
+      Log.e(LOGTAG, "Error checking authentication: " + error.getMessage());
+      callback.invoke(error.getMessage());
+    }
+  }
+
   private int getKeyTypeFromString(String type) throws IllegalArgumentException {
     if (type == null) {
         throw new IllegalArgumentException("Key type cannot be null");

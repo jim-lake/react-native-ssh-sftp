@@ -1,18 +1,41 @@
 import React, { useState } from 'react';
 import {
-  Platform,
   View,
   Text,
   StyleSheet,
   Alert,
   TouchableOpacity,
   ScrollView,
+  Platform,
+  NativeModules,
+  NativeEventEmitter,
+  DeviceEventEmitter,
+  EmitterSubscription,
 } from 'react-native';
 import SSHClient from 'react-native-ssh-sftp';
 import forge from 'node-forge';
 import nacl from 'tweetnacl';
 import naclUtil from 'tweetnacl-util';
 import elliptic from 'elliptic';
+
+const NATIVE_EVENT_SHELL = 'Shell';
+const NATIVE_EVENT_DOWNLOAD_PROGRESS = 'DownloadProgress';
+const NATIVE_EVENT_UPLOAD_PROGRESS = 'UploadProgress';
+const NATIVE_EVENT_SIGN_CALLBACK = 'SignCallback';
+
+const RNSSHClient = NativeModules.RNSSHClient;
+
+const emitter = new NativeEventEmitter(RNSSHClient);
+
+emitter.addListener('SignCallback', event => {
+  console.log('App.SignCallback:', event);
+});
+
+// this is because event emitter don't work right in this example because voodoo
+SSHClient.setClient(RNSSHClient, emitter);
+
+const HOST = Platform.OS === 'android' ? '10.0.2.2' : '127.0.0.1';
+const PORT = 2222;
 
 // Key extraction utilities
 function extractP256PrivateKey(privateKeyPem) {
@@ -138,32 +161,6 @@ function extractEd25519PrivateKey(opensshPrivateKey) {
   }
 }
 
-import {
-  Platform,
-  NativeModules,
-  NativeEventEmitter,
-  DeviceEventEmitter,
-  EmitterSubscription,
-} from 'react-native';
-
-const NATIVE_EVENT_SHELL = 'Shell';
-const NATIVE_EVENT_DOWNLOAD_PROGRESS = 'DownloadProgress';
-const NATIVE_EVENT_UPLOAD_PROGRESS = 'UploadProgress';
-const NATIVE_EVENT_SIGN_CALLBACK = 'SignCallback';
-
-const RNSSHClient = NativeModules.RNSSHClient;
-
-const emitter = new NativeEventEmitter(RNSSHClient);
-
-emitter.addListener('SignCallback', event => {
-  console.log('App.SignCallback:', event);
-});
-
-// this is because event emitter don't work right in this example because voodoo
-SSHClient.setClient(RNSSHClient, emitter);
-
-const HOST = Platform.OS === 'android' ? '10.0.2.2' : '127.0.0.1';
-const PORT = 2222;
 
 export default function App() {
   const [status, setStatus] = useState('Ready');

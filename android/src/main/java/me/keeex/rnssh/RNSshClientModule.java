@@ -267,10 +267,23 @@ public class RNSshClientModule extends ReactContextBaseJavaModule {
 
   @ReactMethod
   public void provideSignature(String requestId, String signatureBase64) {
+    Log.d(LOGTAG, "=== provideSignature() called ===");
+    Log.d(LOGTAG, "Request ID: " + requestId);
+    Log.d(LOGTAG, "Signature Base64 length: " + (signatureBase64 != null ? signatureBase64.length() : 0));
+    Log.d(LOGTAG, "Signature Base64: " + signatureBase64);
+    
     SignRequest request = pendingSignRequests.get(requestId);
+    Log.d(LOGTAG, "Found pending request: " + (request != null));
+    Log.d(LOGTAG, "Total pending requests: " + pendingSignRequests.size());
+    
     if (request != null) {
       request.signature = signatureBase64;
+      Log.d(LOGTAG, "Set signature on request, counting down latch");
       request.latch.countDown();
+      Log.d(LOGTAG, "Latch count down completed");
+    } else {
+      Log.e(LOGTAG, "No pending request found for ID: " + requestId);
+      Log.e(LOGTAG, "Available request IDs: " + pendingSignRequests.keySet().toString());
     }
   }
 
@@ -280,14 +293,16 @@ public class RNSshClientModule extends ReactContextBaseJavaModule {
       public void run() {
         try {
           SSHClient client = clientPool.get(key);
-          if (client != null && client._session != null && client._session.isConnected()) {
+          if (client != null && client._session != null) {
             // Store connection details
             String username = client._session.getUserName();
             String host = client._session.getHost();
             int port = client._session.getPort();
             
-            // Disconnect current session
-            client._session.disconnect();
+            // Disconnect current session if connected
+            if (client._session.isConnected()) {
+              client._session.disconnect();
+            }
             
             // Create new session with sign callback authentication
             JSch jsch = new JSch();
@@ -301,9 +316,35 @@ public class RNSshClientModule extends ReactContextBaseJavaModule {
               
               @Override
               public byte[] getPublicKeyBlob() {
+                Log.d(LOGTAG, "=== getPublicKeyBlob() called ===");
                 try {
-                  return Base64.decode(publicKey.split(" ")[1], Base64.DEFAULT);
+                  Log.d(LOGTAG, "Original publicKey string: " + publicKey);
+                  
+                  // Check if it's a full SSH key or just the base64 part
+                  String base64Part;
+                  if (publicKey.startsWith("ssh-rsa ")) {
+                    String[] parts = publicKey.split(" ");
+                    base64Part = parts[1];
+                    Log.d(LOGTAG, "Extracted base64 part from SSH key: " + base64Part.substring(0, Math.min(50, base64Part.length())) + "...");
+                  } else {
+                    base64Part = publicKey;
+                    Log.d(LOGTAG, "Using publicKey as base64 directly: " + base64Part.substring(0, Math.min(50, base64Part.length())) + "...");
+                  }
+                  
+                  byte[] keyBlob = Base64.decode(base64Part, Base64.DEFAULT);
+                  Log.d(LOGTAG, "Decoded key blob length: " + keyBlob.length + " bytes");
+                  
+                  // Full hex dump of key blob
+                  StringBuilder keyBlobHex = new StringBuilder();
+                  for (byte b : keyBlob) {
+                    keyBlobHex.append(String.format("%02x", b));
+                  }
+                  Log.d(LOGTAG, "Key blob hex: " + keyBlobHex.toString());
+                  
+                  return keyBlob;
                 } catch (Exception e) {
+                  Log.e(LOGTAG, "Error parsing public key: " + e.getMessage());
+                  e.printStackTrace();
                   return publicKey.getBytes();
                 }
               }
@@ -311,60 +352,143 @@ public class RNSshClientModule extends ReactContextBaseJavaModule {
               @Override
               public byte[] getSignature(byte[] data) {
                 try {
+                  Log.d(LOGTAG, "=== getSignature() called ===");
+                  Log.d(LOGTAG, "Data to sign length: " + data.length + " bytes");
+                  
+                  // Full hex dump of data
+                  StringBuilder dataHex = new StringBuilder();
+                  for (byte b : data) {
+                    dataHex.append(String.format("%02x", b));
+                  }
+                  Log.d(LOGTAG, "Data to sign hex: " + dataHex.toString());
+                  
                   String requestId = UUID.randomUUID().toString();
                   String dataBase64 = Base64.encodeToString(data, Base64.DEFAULT);
+                  
+                  Log.d(LOGTAG, "Request ID: " + requestId);
+                  Log.d(LOGTAG, "Data Base64: " + dataBase64);
                   
                   SignRequest signRequest = new SignRequest();
                   pendingSignRequests.put(requestId, signRequest);
                   
+                  Log.d(LOGTAG, "Created SignRequest and added to pending requests");
+                  Log.d(LOGTAG, "Pending requests count: " + pendingSignRequests.size());
+                  
                   // Send event to JavaScript
                   WritableMap params = Arguments.createMap();
+                  params.putString("name", "SignCallback");
                   params.putString("key", key);
                   params.putString("requestId", requestId);
                   params.putString("data", dataBase64);
+                  
+                  Log.d(LOGTAG, "Sending SignCallback event to JavaScript with key: " + key);
                   
                   reactContext
                     .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
                     .emit("SignCallback", params);
                   
+                  Log.d(LOGTAG, "SignCallback event sent, waiting for response...");
+                  
                   // Wait for JavaScript callback (30 second timeout)
-                  if (signRequest.latch.await(30, TimeUnit.SECONDS) && signRequest.signature != null) {
-                    byte[] signature = Base64.decode(signRequest.signature, Base64.DEFAULT);
+                  boolean awaitResult = signRequest.latch.await(30, TimeUnit.SECONDS);
+                  Log.d(LOGTAG, "Latch await result: " + awaitResult);
+                  Log.d(LOGTAG, "SignRequest signature: " + (signRequest.signature != null ? "present" : "null"));
+                  
+                  if (awaitResult && signRequest.signature != null) {
+                    Log.d(LOGTAG, "Received signature from JavaScript: " + signRequest.signature);
+                    
+                    byte[] rawSignature = Base64.decode(signRequest.signature, Base64.DEFAULT);
+                    Log.d(LOGTAG, "Decoded raw signature length: " + rawSignature.length + " bytes");
+                    
+                    // Full hex dump of raw signature
+                    StringBuilder rawSigHex = new StringBuilder();
+                    for (byte b : rawSignature) {
+                      rawSigHex.append(String.format("%02x", b));
+                    }
+                    Log.d(LOGTAG, "Raw signature hex: " + rawSigHex.toString());
+                    
+                    // Convert raw signature to SSH wire format
+                    String algorithm = "ssh-rsa";
+                    byte[] algorithmBytes = algorithm.getBytes();
+                    
+                    byte[] sshSignature = new byte[4 + algorithmBytes.length + 4 + rawSignature.length];
+                    
+                    int offset = 0;
+                    
+                    // Length of "ssh-rsa" (big-endian)
+                    sshSignature[offset++] = (byte) ((algorithmBytes.length >> 24) & 0xff);
+                    sshSignature[offset++] = (byte) ((algorithmBytes.length >> 16) & 0xff);
+                    sshSignature[offset++] = (byte) ((algorithmBytes.length >> 8) & 0xff);
+                    sshSignature[offset++] = (byte) (algorithmBytes.length & 0xff);
+                    
+                    // "ssh-rsa"
+                    System.arraycopy(algorithmBytes, 0, sshSignature, offset, algorithmBytes.length);
+                    offset += algorithmBytes.length;
+                    
+                    // Length of raw signature (big-endian)
+                    sshSignature[offset++] = (byte) ((rawSignature.length >> 24) & 0xff);
+                    sshSignature[offset++] = (byte) ((rawSignature.length >> 16) & 0xff);
+                    sshSignature[offset++] = (byte) ((rawSignature.length >> 8) & 0xff);
+                    sshSignature[offset++] = (byte) (rawSignature.length & 0xff);
+                    
+                    // Raw signature bytes
+                    System.arraycopy(rawSignature, 0, sshSignature, offset, rawSignature.length);
+                    
+                    Log.d(LOGTAG, "Created SSH signature length: " + sshSignature.length + " bytes");
+                    
+                    // Full hex dump of SSH signature
+                    StringBuilder sshSigHex = new StringBuilder();
+                    for (byte b : sshSignature) {
+                      sshSigHex.append(String.format("%02x", b));
+                    }
+                    Log.d(LOGTAG, "SSH signature hex: " + sshSigHex.toString());
+                    
                     pendingSignRequests.remove(requestId);
-                    return signature;
+                    Log.d(LOGTAG, "Removed request from pending, returning SSH signature");
+                    return sshSignature;
                   }
+                  
+                  Log.e(LOGTAG, "Sign callback failed - timeout or no signature received");
+                  Log.e(LOGTAG, "Await result: " + awaitResult);
+                  Log.e(LOGTAG, "Signature present: " + (signRequest.signature != null));
                   
                   pendingSignRequests.remove(requestId);
                   throw new JSchException("Sign callback timeout or failed");
                   
                 } catch (Exception e) {
-                  Log.e(LOGTAG, "Sign callback failed: " + e.getMessage());
+                  Log.e(LOGTAG, "Sign callback exception: " + e.getMessage());
+                  e.printStackTrace();
                   return null;
                 }
               }
               
               @Override
               public boolean decrypt() {
+                Log.d(LOGTAG, "=== decrypt() called ===");
                 return true;
               }
               
               @Override
               public String getAlgName() {
+                Log.d(LOGTAG, "=== getAlgName() called ===");
                 return "ssh-rsa";
               }
               
               @Override
               public String getName() {
+                Log.d(LOGTAG, "=== getName() called ===");
                 return "sign-callback";
               }
               
               @Override
               public boolean isEncrypted() {
+                Log.d(LOGTAG, "=== isEncrypted() called ===");
                 return false;
               }
               
               @Override
               public void clear() {
+                Log.d(LOGTAG, "=== clear() called ===");
                 // Nothing to clear
               }
             };

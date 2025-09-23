@@ -367,11 +367,34 @@ gQT51sWj0C7S5tkmVWqRbuKLPLNTa4IW+Ls30yReijz95DWMHf0X
       const testPrivateKey = forge.pki.privateKeyFromPem(privateKeyPem);
 
       const signCallback = async data => {
-        const rawData = forge.util.decode64(data);
-        const md = forge.md.sha1.create();
-        md.update(rawData);
-        const signature = testPrivateKey.sign(md);
-        return forge.util.encode64(signature);
+        console.log('=== App signCallback called ===');
+        console.log('Data received:', data);
+        console.log('Data length:', data ? data.length : 0);
+        console.log('Data type:', typeof data);
+        
+        try {
+          console.log('Decoding base64 data...');
+          const rawData = forge.util.decode64(data);
+          console.log('Raw data length:', rawData.length);
+          
+          console.log('Creating SHA1 hash...');
+          const md = forge.md.sha1.create();
+          md.update(rawData);
+          
+          console.log('Signing with private key...');
+          const signature = testPrivateKey.sign(md);
+          console.log('Raw signature length:', signature.length);
+          
+          console.log('Encoding signature to base64...');
+          const encodedSignature = forge.util.encode64(signature);
+          console.log('Encoded signature length:', encodedSignature.length);
+          console.log('Encoded signature (first 100 chars):', encodedSignature.substring(0, 100));
+          
+          return encodedSignature;
+        } catch (error) {
+          console.error('Sign callback error:', error);
+          throw error;
+        }
       };
 
       const client = await SSHClient.connect(HOST, PORT, 'user');

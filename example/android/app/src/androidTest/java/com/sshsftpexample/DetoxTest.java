@@ -47,7 +47,7 @@ public class DetoxTest {
         System.out.println("SUCCESS: RSA Key authentication worked!");
     }
 
-    // @Test
+    @Test
     public void testRSA2048Sign() throws Exception {
         Intent intent = new Intent();
         mActivityRule.launchActivity(intent);

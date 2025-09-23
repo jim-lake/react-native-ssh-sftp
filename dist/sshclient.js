@@ -322,8 +322,19 @@ export default class SSHClient {
      * @param event The native event to handle.
      */
     handleEvent(event) {
+        console.log('=== SSHClient.handleEvent called ===');
+        console.log('Event:', JSON.stringify(event, null, 2));
+        console.log('Event name:', event.name);
+        console.log('Event key:', event.key);
+        console.log('This._key:', this._key);
+        console.log('Keys match:', this._key === event.key);
+        console.log('Handler exists for event name:', !!this._handlers[event.name]);
         if (this._handlers[event.name] && this._key === event.key) {
+            console.log('Calling handler for event:', event.name);
             this._handlers[event.name](event.value, event);
+        }
+        else {
+            console.log('Handler not called - handler exists:', !!this._handlers[event.name], 'keys match:', this._key === event.key);
         }
     }
     /**
@@ -333,7 +344,13 @@ export default class SSHClient {
      * @param handler - The event handler function.
      */
     on(eventName, handler) {
+        console.log('=== SSHClient.on called ===');
+        console.log('Event name:', eventName);
+        console.log('Handler type:', typeof handler);
+        console.log('Client key:', this._key);
         this._handlers[eventName] = handler;
+        console.log('Handler registered for:', eventName);
+        console.log('Total handlers:', Object.keys(this._handlers).length);
     }
     /**
      * Registers a native listener for the specified event name.
@@ -341,7 +358,12 @@ export default class SSHClient {
      * @param eventName - The name of the event to listen for.
      */
     registerNativeListener(eventName) {
+        console.log('=== registerNativeListener called ===');
+        console.log('Event name:', eventName);
+        console.log('Client key:', this._key);
+        console.log('Existing listener:', !!this._listeners[eventName]);
         this._listeners[eventName] = RNSSHClientEmitter.addListener(eventName, this.handleEvent.bind(this));
+        console.log('Listener registered for:', eventName);
     }
     /**
      * Unregisters a native listener for the specified event name.
@@ -362,11 +384,27 @@ export default class SSHClient {
      */
     handleSignCallback(signCallback, _value, event) {
         return __awaiter(this, void 0, void 0, function* () {
+            console.log('=== handleSignCallback called ===');
+            console.log('Event:', JSON.stringify(event, null, 2));
+            console.log('SignCallback function:', typeof signCallback);
+            console.log('Event key:', event.key);
+            console.log('This key:', this._key);
+            console.log('Keys match:', event.key === this._key);
+            console.log('Event requestId:', event.requestId);
+            console.log('Event data length:', event.data ? event.data.length : 0);
+            console.log('Event data (first 100 chars):', event.data ? event.data.substring(0, 100) : 'null');
             try {
+                console.log('Calling signCallback with data...');
                 const signature = yield signCallback(event.data);
+                console.log('SignCallback returned signature length:', signature ? signature.length : 0);
+                console.log('Signature (first 100 chars):', signature ? signature.substring(0, 100) : 'null');
+                console.log('Calling RNSSHClient.provideSignature...');
                 RNSSHClient.provideSignature(event.requestId, signature);
+                console.log('provideSignature call completed');
             }
-            catch (_a) {
+            catch (error) {
+                console.error('SignCallback error:', error);
+                console.log('Providing empty signature due to error');
                 RNSSHClient.provideSignature(event.requestId, '');
             }
         });
@@ -488,11 +526,20 @@ export default class SSHClient {
      * @returns A Promise that resolves when authentication is successful.
      */
     authenticateWithSignCallback(publicKey, signCallback, callback) {
+        console.log('=== authenticateWithSignCallback called ===');
+        console.log('Public key length:', publicKey ? publicKey.length : 0);
+        console.log('SignCallback type:', typeof signCallback);
+        console.log('Client key:', this._key);
         return new Promise((resolve, reject) => {
             // Set up sign callback listener for both platforms
+            console.log('Registering SignCallback listener...');
             this.registerNativeListener(NATIVE_EVENT_SIGN_CALLBACK);
+            console.log('Setting up event handler...');
             this.on('SignCallback', this.handleSignCallback.bind(this, signCallback));
+            console.log('Calling native authenticateWithSignCallback...');
             RNSSHClient.authenticateWithSignCallback(publicKey, this._key, (error) => {
+                console.log('Native authenticateWithSignCallback callback called');
+                console.log('Error:', error);
                 if (callback) {
                     callback(error ? createSSHError(error) : null);
                 }

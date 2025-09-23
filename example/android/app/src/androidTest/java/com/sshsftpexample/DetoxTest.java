@@ -33,49 +33,47 @@ public class DetoxTest {
     public void testRSAKey() throws Exception {
         Intent intent = new Intent();
         mActivityRule.launchActivity(intent);
-        Thread.sleep(5000);
         
-        // Check if app launched
-        UiObject title = device.findObject(new UiSelector().text("SSH SFTP Example"));
-        System.out.println("Title exists: " + title.exists());
-        assertTrue("Title should exist", title.exists());
+        // Wait for app to launch with polling
+        waitForElement(new UiSelector().text("SSH SFTP Example"), 10000, "App title should appear");
         
-        // Find RSA Key button
-        UiObject rsaButton = device.findObject(new UiSelector().text("RSA Key"));
-        System.out.println("RSA Key button exists: " + rsaButton.exists());
-        assertTrue("rsa button should exist", rsaButton.exists());
-        
+        // Find and click RSA Key button
+        UiObject rsaButton = waitForElement(new UiSelector().text("RSA Key"), 5000, "RSA Key button should exist");
         rsaButton.click();
         System.out.println("RSA Key button clicked, waiting for authentication...");
-        Thread.sleep(15000); // Increased wait time
         
-        // Check for success message
-        UiObject successText = device.findObject(new UiSelector().textContains("RSA Key Connected!"));
-        System.out.println("RSA Key Connected text exists: " + successText.exists());
+        // Wait for authentication result with polling
+        UiObject successText = waitForElement(new UiSelector().textContains("RSA Key Connected!"), 30000, "RSA Key authentication should succeed");
+        System.out.println("SUCCESS: RSA Key authentication worked!");
+    }
+    
+    private UiObject waitForElement(UiSelector selector, long timeoutMs, String errorMessage) throws Exception {
+        long startTime = System.currentTimeMillis();
+        int attempts = 0;
+        int maxAttempts = (int) (timeoutMs / 500); // Check every 500ms
         
-        if (successText.exists()) {
-            System.out.println("SUCCESS: RSA Key authentication worked!");
-            return;
+        while (attempts < maxAttempts) {
+            UiObject element = device.findObject(selector);
+            if (element.exists()) {
+                System.out.println("Found element after " + (System.currentTimeMillis() - startTime) + "ms, " + attempts + " attempts");
+                return element;
+            }
+            
+            attempts++;
+            Thread.sleep(500);
         }
         
-        // If authentication didn't succeed, check what status we have
+        // Log current state for debugging
         UiObject statusText = device.findObject(new UiSelector().textContains("Status:"));
         if (statusText.exists()) {
             System.out.println("Current status: " + statusText.getText());
         }
         
-        // Check for any error messages
         UiObject failedText = device.findObject(new UiSelector().textContains("Failed"));
         if (failedText.exists()) {
             System.out.println("Found failure text: " + failedText.getText());
         }
         
-        // Check for any RSA-related text
-        UiObject rsaText = device.findObject(new UiSelector().textContains("RSA"));
-        if (rsaText.exists()) {
-            System.out.println("Found RSA text: " + rsaText.getText());
-        }
-
-        assertTrue("Authentication should succeed", successText.exists());
+        throw new AssertionError(errorMessage + " (timeout after " + timeoutMs + "ms, " + attempts + " attempts)");
     }
 }

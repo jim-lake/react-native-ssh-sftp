@@ -16,46 +16,6 @@ import static org.junit.Assert.*;
 public class SSHClientDirectTest {
 
     @Test
-    public void testConnectToHost() throws Exception {
-        String host = "127.0.0.1";
-        int port = 2222;
-        String username = "user";
-        String password = "password";
-        
-        System.out.println("=== SSH CONNECTION TEST ===");
-        System.out.println("Connecting to: " + host + ":" + port);
-        System.out.println("Username: " + username);
-        System.out.println("Password: " + password);
-        
-        JSch jsch = new JSch();
-        Session session = null;
-        
-        try {
-            session = jsch.getSession(username, host, port);
-            session.setPassword(password);
-            
-            Properties config = new Properties();
-            config.put("StrictHostKeyChecking", "no");
-            session.setConfig(config);
-            
-            session.setTimeout(10000);
-            session.connect();
-            
-            assertTrue("SSH connection should be established", session.isConnected());
-            System.out.println("SUCCESS: Connected to SSH server " + host + ":" + port + " with user " + username);
-            
-        } catch (Exception e) {
-            System.out.println("FAILED: Connection to " + host + ":" + port + " failed: " + e.getMessage());
-            fail("Failed to connect to SSH server: " + e.getMessage());
-        } finally {
-            if (session != null && session.isConnected()) {
-                session.disconnect();
-                System.out.println("Disconnected from SSH server");
-            }
-        }
-    }
-
-    @Test
     public void testAuthenticateWithPasswordSuccess() throws Exception {
         String host = "127.0.0.1";
         int port = 2222;

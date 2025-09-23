@@ -37,7 +37,7 @@ react-native-ssh-sftp/
 - Node.js >= 20
 - React Native development environment
 - For iOS: Xcode, iOS Simulator, `applesimutils`
-- For Android: Android Studio, Android SDK, AVD named `Pixel_3a_API_30_x86`
+- For Android: Android Studio, Android SDK, AVD named `Pixel_3a_API_36_ARM`
 
 ### Library Development
 ```bash
@@ -111,17 +111,18 @@ npm run e2e:test:android
 ```
 
 **Test Results (Current Status):**
-- `auth-methods.test.js`: ✅ ALL 7 TESTS PASSING (46s total runtime)
-  - Docker SSH password authentication: ✅ (7.3s)
-  - RSA key authentication: ✅ (4.8s)
-  - OpenSSH key authentication: ✅ (4.8s)
-  - Encrypted RSA key authentication: ✅ (3.6s)
-  - SFTP functionality: ✅ (5.8s)
-  - Sign callback authentication: ✅ (6.8s)
-  - Basic SSH functionality: ✅ (3.6s)
-- `app.test.js`: ✅ Passing with proper alert handling
-- `basic-app.test.js`: ✅ UI element visibility tests passing
-- `simple-launch.test.js`: ✅ Basic app launch test passing
+- **iOS E2E Tests**: ✅ ALL 18 TESTS PASSING (158s total runtime)
+  - `auth-methods.test.js`: ✅ 12 tests passing (98s)
+  - `simple-launch.test.js`: ✅ 1 test passing (9s)  
+  - `negative-auth.test.js`: ✅ 2 tests passing (22s)
+  - `app.test.js`: ✅ 1 test passing (19s)
+  - `basic-app.test.js`: ✅ 2 tests passing (10s)
+- **Android E2E Tests**: ✅ ALL TESTS PASSING (3.968s total runtime)
+  - Android example app: ✅ Builds and runs successfully
+  - Android test APK: ✅ Builds successfully
+  - Android E2E test: ✅ 1 test passing - verifies app launch and UI elements
+  - **Note**: Uses Android instrumentation testing with UiAutomator instead of Detox
+  - **Test Coverage**: App launch, title verification, status display, button presence
 
 ## API Architecture
 

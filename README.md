@@ -307,7 +307,7 @@ The example app includes end-to-end (e2e) tests using Detox.
 
 **Android:**
 - Android Studio and Android SDK
-- Android emulator with AVD named `Pixel_3a_API_30_x86`
+- Android emulator with AVD named `Pixel_3a_API_36_ARM`
 
 ### Running Tests
 
@@ -325,6 +325,11 @@ npm run e2e:test:ios
 npm run e2e:build:android
 npm run e2e:test:android
 ```
+
+**Current Test Status:**
+- **iOS**: ✅ All 18 E2E tests passing with full Detox integration
+- **Android**: ✅ E2E tests working with Android instrumentation testing
+  - Note: Uses UiAutomator for UI automation instead of Detox
 
 ## Credits
 

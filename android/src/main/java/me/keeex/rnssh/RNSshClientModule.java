@@ -210,10 +210,10 @@ public class RNSshClientModule extends ReactContextBaseJavaModule {
             JSch jsch = new JSch();
             
             byte[] privateKey = keyPairs.getString("privateKey").getBytes();
-            byte[] publicKey = keyPairs.hasKey("publicKey") ? keyPairs.getString("publicKey").getBytes() : null;
             byte[] passphrase = keyPairs.hasKey("passphrase") ? keyPairs.getString("passphrase").getBytes() : null;
             
-            jsch.addIdentity("default", privateKey, publicKey, passphrase);
+            // JSch can work with just the private key - it will derive the public key
+            jsch.addIdentity("default", privateKey, null, passphrase);
             
             Session session = jsch.getSession(username, host, port);
             
@@ -969,6 +969,15 @@ public class RNSshClientModule extends ReactContextBaseJavaModule {
       }
     }).start();
   }
+
+  @ReactMethod
+  public void addListener(String eventName) {
+    // Keep: Required for RN built in Event Emitter Calls.
+  }
+
+  @ReactMethod
+  public void removeListeners(Integer count) {
+    // Keep: Required for RN built in Event Emitter Calls.
   }
 
   private class progressMonitor implements SftpProgressMonitor {
@@ -1010,15 +1019,5 @@ public class RNSshClientModule extends ReactContextBaseJavaModule {
 
     public void end() {
     }
-  }
-
-  @ReactMethod
-  public void addListener(String eventName) {
-    // Keep: Required for RN built in Event Emitter Calls.
-  }
-
-  @ReactMethod
-  public void removeListeners(Integer count) {
-    // Keep: Required for RN built in Event Emitter Calls.
   }
 }

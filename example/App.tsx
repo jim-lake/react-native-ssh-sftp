@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  Platform,
   View,
   Text,
   StyleSheet,
@@ -161,7 +162,7 @@ emitter.addListener('SignCallback', event => {
 // this is because event emitter don't work right in this example because voodoo
 SSHClient.setClient(RNSSHClient, emitter);
 
-const HOST = '127.0.0.1';
+const HOST = Platform.OS === 'android' ? '10.0.2.2' : '127.0.0.1';
 const PORT = 2222;
 
 export default function App() {

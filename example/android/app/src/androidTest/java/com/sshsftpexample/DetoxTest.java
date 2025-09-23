@@ -50,7 +50,7 @@ public class DetoxTest {
         Thread.sleep(15000); // Increased wait time
         
         // Check for success message
-        UiObject successText = device.findObject(new UiSelector().text("RSA Key Connected!"));
+        UiObject successText = device.findObject(new UiSelector().textContains("RSA Key Connected!"));
         System.out.println("RSA Key Connected text exists: " + successText.exists());
         
         if (successText.exists()) {

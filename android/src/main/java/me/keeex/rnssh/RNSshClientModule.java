@@ -127,22 +127,21 @@ public class RNSshClientModule extends ReactContextBaseJavaModule {
           Properties properties = new Properties();
           properties.setProperty("StrictHostKeyChecking", "no");
           session.setConfig(properties);
-          session.connect();
+          
+          // Don't connect yet - just create the session and store it
+          // Connection will happen during authentication
+          SSHClient client = new SSHClient();
+          client._session = session;
+          client._key = key;
+          clientPool.put(key, client);
 
-          if (session.isConnected()) {
-            SSHClient client = new SSHClient();
-            client._session = session;
-            client._key = key;
-            clientPool.put(key, client);
-
-            Log.d(LOGTAG, "Session connected (not authenticated)");
-            callback.invoke();
-          }
+          Log.d(LOGTAG, "Session created (not connected yet)");
+          callback.invoke();
         } catch (JSchException error) {
-          Log.e(LOGTAG, "Connection failed: " + error.getMessage());
+          Log.e(LOGTAG, "Session creation failed: " + error.getMessage());
           callback.invoke(error.getMessage());
         } catch (Exception error) {
-          Log.e(LOGTAG, "Connection failed: " + error.getMessage());
+          Log.e(LOGTAG, "Session creation failed: " + error.getMessage());
           callback.invoke(error.getMessage());
         }
       }
@@ -197,14 +196,16 @@ public class RNSshClientModule extends ReactContextBaseJavaModule {
       public void run() {
         try {
           SSHClient client = clientPool.get(key);
-          if (client != null && client._session != null && client._session.isConnected()) {
+          if (client != null && client._session != null) {
             // Store connection details
             String username = client._session.getUserName();
             String host = client._session.getHost();
             int port = client._session.getPort();
             
-            // Disconnect current session
-            client._session.disconnect();
+            // Disconnect current session if connected
+            if (client._session.isConnected()) {
+              client._session.disconnect();
+            }
             
             // Create new session with key authentication
             JSch jsch = new JSch();
@@ -236,7 +237,9 @@ public class RNSshClientModule extends ReactContextBaseJavaModule {
             
             Properties properties = new Properties();
             properties.setProperty("StrictHostKeyChecking", "no");
+            properties.setProperty("PreferredAuthentications", "publickey");
             session.setConfig(properties);
+            
             session.connect();
             
             if (session.isConnected()) {
@@ -248,7 +251,7 @@ public class RNSshClientModule extends ReactContextBaseJavaModule {
               callback.invoke("Key authentication failed - session not connected");
             }
           } else {
-            Log.e(LOGTAG, "Client not connected or session is null");
+            Log.e(LOGTAG, "Client not found or session is null");
             callback.invoke("Client not connected");
           }
         } catch (JSchException error) {

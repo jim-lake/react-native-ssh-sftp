@@ -331,11 +331,35 @@ public class SSHClientDirectTest {
             System.out.println("Modulus length: " + modulus.bitLength() + " bits");
             System.out.println("Public exponent: " + publicExponent);
             
+            // Generate SSH wire format for calculated public key
+            byte[] calculatedKeyBlob = generateSSHPublicKeyBlob((RSAPublicKey) calculatedPublicKey);
+            
             // Validate against expected SSH public key
             String expectedPublicKey = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC/XulQBQ2ms2sA+0QIe5XPWdmGDqb5oBzBjODFUQPIdF9etRRlEfQQDS6+YGailP/F+WGMWN3OvWHBTVwEXkxSzPc0qfG5sqdqeQf/1STvkN+I98SWYIaKEkv0IVe5eTAMr8atA8gzX3w9XHoqtg4aeeZtz5uBgd3q2YdG9RiRkTMJ4YHT5TzQSFJy+FCuV4SP4SaU/Zv5Q/grZTsMcBal1tziu3xnuYH5vJmvFXXDPwUiJ6da+oUYf7D+wsqlL8/KDyiRPg2VX+E9rIoNe2J56MWjUoqoa/45Y7TaND8zN9fxTw6bgU9W9Yre5JpLaR9KtvoETe6lIprc5IV54PWx test-agent@nmssh";
             byte[] expectedKeyBlob = Base64.getDecoder().decode(expectedPublicKey.split(" ")[1]);
             
             System.out.println("Expected SSH public key blob: " + expectedKeyBlob.length + " bytes");
+            System.out.println("Calculated SSH public key blob: " + calculatedKeyBlob.length + " bytes");
+            
+            // Full hex dump comparison
+            StringBuilder expectedHex = new StringBuilder();
+            for (byte b : expectedKeyBlob) {
+                expectedHex.append(String.format("%02x", b));
+            }
+            System.out.println("Expected key blob hex: " + expectedHex.toString());
+            
+            StringBuilder calculatedHex = new StringBuilder();
+            for (byte b : calculatedKeyBlob) {
+                calculatedHex.append(String.format("%02x", b));
+            }
+            System.out.println("Calculated key blob hex: " + calculatedHex.toString());
+            
+            if (!java.util.Arrays.equals(expectedKeyBlob, calculatedKeyBlob)) {
+                System.out.println("ERROR: Public key mismatch!");
+                fail("Calculated public key does not match expected public key");
+            } else {
+                System.out.println("SUCCESS: Public keys match perfectly");
+            }
             
             // Create custom identity with comprehensive logging
             Identity identity = new Identity() {
@@ -394,12 +418,12 @@ public class SSHClientDirectTest {
                     System.out.println("Call #" + (++callCount));
                     System.out.println("Data to sign length: " + data.length + " bytes");
                     
-                    // Log first 32 bytes of data
+                    // Full hex dump of data
                     StringBuilder dataHex = new StringBuilder();
-                    for (int i = 0; i < Math.min(data.length, 32); i++) {
-                        dataHex.append(String.format("%02x ", data[i]));
+                    for (byte b : data) {
+                        dataHex.append(String.format("%02x", b));
                     }
-                    System.out.println("Data (first 32 bytes): " + dataHex.toString());
+                    System.out.println("Data to sign hex: " + dataHex.toString());
                     
                     try {
                         // Use SHA1withRSA signature
@@ -410,54 +434,44 @@ public class SSHClientDirectTest {
                         
                         System.out.println("Generated raw signature: " + rawSignature.length + " bytes");
                         
-                        // Log first 16 bytes of raw signature
-                        StringBuilder sigHex = new StringBuilder();
-                        for (int i = 0; i < Math.min(rawSignature.length, 16); i++) {
-                            sigHex.append(String.format("%02x ", rawSignature[i]));
+                        // Full hex dump of raw signature
+                        StringBuilder rawSigHex = new StringBuilder();
+                        for (byte b : rawSignature) {
+                            rawSigHex.append(String.format("%02x", b));
                         }
-                        System.out.println("Raw signature (first 16 bytes): " + sigHex.toString());
+                        System.out.println("Raw signature hex: " + rawSigHex.toString());
                         
-                        // Create SSH wire format signature: algorithm + signature
+                        // SSH signature format: [length of "ssh-rsa"]["ssh-rsa"][raw signature bytes]
                         String algorithm = "ssh-rsa";
                         byte[] algorithmBytes = algorithm.getBytes();
                         
-                        // SSH wire format: length + algorithm + length + signature
-                        int totalLength = 4 + algorithmBytes.length + 4 + rawSignature.length;
-                        byte[] sshSignature = new byte[totalLength];
+                        byte[] sshSignature = new byte[4 + algorithmBytes.length + rawSignature.length];
                         
                         int offset = 0;
                         
-                        // Algorithm name length (big-endian)
+                        // Length of "ssh-rsa" (big-endian)
                         sshSignature[offset++] = (byte) ((algorithmBytes.length >> 24) & 0xff);
                         sshSignature[offset++] = (byte) ((algorithmBytes.length >> 16) & 0xff);
                         sshSignature[offset++] = (byte) ((algorithmBytes.length >> 8) & 0xff);
                         sshSignature[offset++] = (byte) (algorithmBytes.length & 0xff);
                         
-                        // Algorithm name
+                        // "ssh-rsa"
                         System.arraycopy(algorithmBytes, 0, sshSignature, offset, algorithmBytes.length);
                         offset += algorithmBytes.length;
                         
-                        // Signature length (big-endian)
-                        sshSignature[offset++] = (byte) ((rawSignature.length >> 24) & 0xff);
-                        sshSignature[offset++] = (byte) ((rawSignature.length >> 16) & 0xff);
-                        sshSignature[offset++] = (byte) ((rawSignature.length >> 8) & 0xff);
-                        sshSignature[offset++] = (byte) (rawSignature.length & 0xff);
-                        
-                        // Signature
+                        // Raw signature bytes
                         System.arraycopy(rawSignature, 0, sshSignature, offset, rawSignature.length);
                         
-                        System.out.println("Generated SSH wire signature: " + sshSignature.length + " bytes");
+                        System.out.println("Generated SSH signature: " + sshSignature.length + " bytes");
                         
-                        // Log first 16 bytes of SSH signature
+                        // Full hex dump of SSH signature
                         StringBuilder sshSigHex = new StringBuilder();
-                        for (int i = 0; i < Math.min(sshSignature.length, 16); i++) {
-                            sshSigHex.append(String.format("%02x ", sshSignature[i]));
+                        for (byte b : sshSignature) {
+                            sshSigHex.append(String.format("%02x", b));
                         }
-                        System.out.println("SSH signature (first 16 bytes): " + sshSigHex.toString());
+                        System.out.println("SSH signature hex: " + sshSigHex.toString());
                         
-                        // Try returning just the raw signature instead of SSH wire format
-                        System.out.println("Returning raw signature instead of SSH wire format");
-                        return rawSignature;
+                        return sshSignature;
                     } catch (Exception e) {
                         System.out.println("ERROR: Sign callback failed: " + e.getMessage());
                         e.printStackTrace();
@@ -604,5 +618,58 @@ public class SSHClientDirectTest {
         System.arraycopy(pkcs1Key, 0, pkcs8Key, pkcs8Header.length, pkcs1Key.length);
         
         return pkcs8Key;
+    }
+    
+    private byte[] generateSSHPublicKeyBlob(RSAPublicKey publicKey) {
+        try {
+            String algorithm = "ssh-rsa";
+            byte[] algorithmBytes = algorithm.getBytes();
+            
+            BigInteger publicExponent = publicKey.getPublicExponent();
+            BigInteger modulus = publicKey.getModulus();
+            
+            byte[] exponentBytes = publicExponent.toByteArray();
+            byte[] modulusBytes = modulus.toByteArray();
+            
+            // SSH wire format: [alg_len][algorithm][exp_len][exponent][mod_len][modulus]
+            int totalLength = 4 + algorithmBytes.length + 4 + exponentBytes.length + 4 + modulusBytes.length;
+            byte[] keyBlob = new byte[totalLength];
+            
+            int offset = 0;
+            
+            // Algorithm length
+            keyBlob[offset++] = (byte) ((algorithmBytes.length >> 24) & 0xff);
+            keyBlob[offset++] = (byte) ((algorithmBytes.length >> 16) & 0xff);
+            keyBlob[offset++] = (byte) ((algorithmBytes.length >> 8) & 0xff);
+            keyBlob[offset++] = (byte) (algorithmBytes.length & 0xff);
+            
+            // Algorithm
+            System.arraycopy(algorithmBytes, 0, keyBlob, offset, algorithmBytes.length);
+            offset += algorithmBytes.length;
+            
+            // Exponent length
+            keyBlob[offset++] = (byte) ((exponentBytes.length >> 24) & 0xff);
+            keyBlob[offset++] = (byte) ((exponentBytes.length >> 16) & 0xff);
+            keyBlob[offset++] = (byte) ((exponentBytes.length >> 8) & 0xff);
+            keyBlob[offset++] = (byte) (exponentBytes.length & 0xff);
+            
+            // Exponent
+            System.arraycopy(exponentBytes, 0, keyBlob, offset, exponentBytes.length);
+            offset += exponentBytes.length;
+            
+            // Modulus length
+            keyBlob[offset++] = (byte) ((modulusBytes.length >> 24) & 0xff);
+            keyBlob[offset++] = (byte) ((modulusBytes.length >> 16) & 0xff);
+            keyBlob[offset++] = (byte) ((modulusBytes.length >> 8) & 0xff);
+            keyBlob[offset++] = (byte) (modulusBytes.length & 0xff);
+            
+            // Modulus
+            System.arraycopy(modulusBytes, 0, keyBlob, offset, modulusBytes.length);
+            
+            return keyBlob;
+        } catch (Exception e) {
+            System.out.println("ERROR: Failed to generate SSH public key blob: " + e.getMessage());
+            return null;
+        }
     }
 }

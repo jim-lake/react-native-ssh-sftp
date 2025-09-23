@@ -30,7 +30,7 @@ cd ../android
 adb logcat -c
 
 # Start logcat in background to capture test logs
-adb logcat -v time | grep --line-buffered -E "(System.out|TestRunner|sshsftpexample|SSHClient)" &
+adb logcat -v time | grep --line-buffered -E "(System.out|TestRunner|SSHClient)" &
 LOGCAT_PID=$!
 
 # Give logcat a moment to start

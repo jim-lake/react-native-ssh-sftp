@@ -3,6 +3,16 @@ set -e
 
 cd "$(dirname "$0")"
 
+# Cleanup function
+cleanup() {
+    if [ ! -z "$LOGCAT_PID" ]; then
+        kill $LOGCAT_PID 2>/dev/null || true
+    fi
+}
+
+# Always cleanup on exit
+trap cleanup EXIT
+
 echo "Starting SSH test server..."
 cd tests
 ./start-test-server.sh
@@ -29,9 +39,6 @@ echo "Running tests..."
 
 # Give logs time to flush
 sleep 3
-
-# Stop logcat
-kill $LOGCAT_PID 2>/dev/null || true
 
 echo "Stopping SSH test server..."
 cd ../tests

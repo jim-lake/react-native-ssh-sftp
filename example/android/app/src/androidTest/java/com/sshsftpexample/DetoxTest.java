@@ -46,6 +46,24 @@ public class DetoxTest {
         UiObject successText = waitForElement(new UiSelector().textContains("RSA Key Connected!"), 30000, "RSA Key authentication should succeed");
         System.out.println("SUCCESS: RSA Key authentication worked!");
     }
+
+    @Test
+    public void testRSA2048Sign() throws Exception {
+        Intent intent = new Intent();
+        mActivityRule.launchActivity(intent);
+        
+        // Wait for app to launch with polling
+        waitForElement(new UiSelector().text("SSH SFTP Example"), 10000, "App title should appear");
+        
+        // Find and click RSA 2048 Sign button
+        UiObject signButton = waitForElement(new UiSelector().text("RSA 2048 Sign"), 5000, "RSA 2048 Sign button should exist");
+        signButton.click();
+        System.out.println("RSA 2048 Sign button clicked, waiting for authentication...");
+        
+        // Wait for authentication result with polling
+        UiObject successText = waitForElement(new UiSelector().textContains("RSA 2048 Sign Callback Connected!"), 30000, "RSA 2048 Sign authentication should succeed");
+        System.out.println("SUCCESS: RSA 2048 Sign authentication worked!");
+    }
     
     private UiObject waitForElement(UiSelector selector, long timeoutMs, String errorMessage) throws Exception {
         long startTime = System.currentTimeMillis();

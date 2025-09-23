@@ -127,7 +127,7 @@ public class DetoxTest {
             System.out.println("Found RSA text: " + rsaText.getText());
         }
 
-        assert(successText.exists());
+        assertTrue("Authentication should succeed", successText.exists());
     }
 
     // @Test

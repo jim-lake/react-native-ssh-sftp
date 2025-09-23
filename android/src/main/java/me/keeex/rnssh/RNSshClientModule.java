@@ -289,6 +289,13 @@ public class RNSshClientModule extends ReactContextBaseJavaModule {
 
   @ReactMethod
   public void authenticateWithSignCallback(final String publicKey, final String key, final Callback callback) {
+    final byte[] keyBlob = Base64.decode(publicKey, Base64.DEFAULT);
+    StringBuilder keyBlobHex = new StringBuilder();
+    for (byte b : keyBlob) {
+      keyBlobHex.append(String.format("%02x", b));
+    }
+    Log.d(LOGTAG, "Key blob hex: " + keyBlobHex.toString());
+
     new Thread(new Runnable() {
       public void run() {
         try {
@@ -317,36 +324,7 @@ public class RNSshClientModule extends ReactContextBaseJavaModule {
               @Override
               public byte[] getPublicKeyBlob() {
                 Log.d(LOGTAG, "=== getPublicKeyBlob() called ===");
-                try {
-                  Log.d(LOGTAG, "Original publicKey string: " + publicKey);
-                  
-                  // Check if it's a full SSH key or just the base64 part
-                  String base64Part;
-                  if (publicKey.startsWith("ssh-rsa ")) {
-                    String[] parts = publicKey.split(" ");
-                    base64Part = parts[1];
-                    Log.d(LOGTAG, "Extracted base64 part from SSH key: " + base64Part.substring(0, Math.min(50, base64Part.length())) + "...");
-                  } else {
-                    base64Part = publicKey;
-                    Log.d(LOGTAG, "Using publicKey as base64 directly: " + base64Part.substring(0, Math.min(50, base64Part.length())) + "...");
-                  }
-                  
-                  byte[] keyBlob = Base64.decode(base64Part, Base64.DEFAULT);
-                  Log.d(LOGTAG, "Decoded key blob length: " + keyBlob.length + " bytes");
-                  
-                  // Full hex dump of key blob
-                  StringBuilder keyBlobHex = new StringBuilder();
-                  for (byte b : keyBlob) {
-                    keyBlobHex.append(String.format("%02x", b));
-                  }
-                  Log.d(LOGTAG, "Key blob hex: " + keyBlobHex.toString());
-                  
-                  return keyBlob;
-                } catch (Exception e) {
-                  Log.e(LOGTAG, "Error parsing public key: " + e.getMessage());
-                  e.printStackTrace();
-                  return publicKey.getBytes();
-                }
+                return keyBlob;
               }
               
               @Override
@@ -408,7 +386,7 @@ public class RNSshClientModule extends ReactContextBaseJavaModule {
                     Log.d(LOGTAG, "Raw signature hex: " + rawSigHex.toString());
                     
                     // Convert raw signature to SSH wire format
-                    String algorithm = "ssh-rsa";
+                    String algorithm = "rsa-sha2-256";
                     byte[] algorithmBytes = algorithm.getBytes();
                     
                     byte[] sshSignature = new byte[4 + algorithmBytes.length + 4 + rawSignature.length];

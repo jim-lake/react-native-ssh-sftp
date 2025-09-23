@@ -540,7 +540,12 @@ export default class SSHClient {
       console.log('Calling handler for event:', event.name);
       this._handlers[event.name](event.value, event);
     } else {
-      console.log('Handler not called - handler exists:', !!this._handlers[event.name], 'keys match:', this._key === event.key);
+      console.log(
+        'Handler not called - handler exists:',
+        !!this._handlers[event.name],
+        'keys match:',
+        this._key === event.key
+      );
     }
   }
 
@@ -612,13 +617,22 @@ export default class SSHClient {
     console.log('Keys match:', event.key === this._key);
     console.log('Event requestId:', event.requestId);
     console.log('Event data length:', event.data ? event.data.length : 0);
-    console.log('Event data (first 100 chars):', event.data ? event.data.substring(0, 100) : 'null');
+    console.log(
+      'Event data (first 100 chars):',
+      event.data ? event.data.substring(0, 100) : 'null'
+    );
 
     try {
       console.log('Calling signCallback with data...');
       const signature = await signCallback(event.data);
-      console.log('SignCallback returned signature length:', signature ? signature.length : 0);
-      console.log('Signature (first 100 chars):', signature ? signature.substring(0, 100) : 'null');
+      console.log(
+        'SignCallback returned signature length:',
+        signature ? signature.length : 0
+      );
+      console.log(
+        'Signature (first 100 chars):',
+        signature ? signature.substring(0, 100) : 'null'
+      );
 
       console.log('Calling RNSSHClient.provideSignature...');
       RNSSHClient.provideSignature(event.requestId, signature);

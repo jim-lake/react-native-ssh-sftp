@@ -161,7 +161,6 @@ function extractEd25519PrivateKey(opensshPrivateKey) {
   }
 }
 
-
 export default function App() {
   const [status, setStatus] = useState('Ready');
 
@@ -371,25 +370,28 @@ gQT51sWj0C7S5tkmVWqRbuKLPLNTa4IW+Ls30yReijz95DWMHf0X
         console.log('Data received:', data);
         console.log('Data length:', data ? data.length : 0);
         console.log('Data type:', typeof data);
-        
+
         try {
           console.log('Decoding base64 data...');
           const rawData = forge.util.decode64(data);
           console.log('Raw data length:', rawData.length);
-          
+
           console.log('Creating SHA1 hash...');
           const md = forge.md.sha1.create();
           md.update(rawData);
-          
+
           console.log('Signing with private key...');
           const signature = testPrivateKey.sign(md);
           console.log('Raw signature length:', signature.length);
-          
+
           console.log('Encoding signature to base64...');
           const encodedSignature = forge.util.encode64(signature);
           console.log('Encoded signature length:', encodedSignature.length);
-          console.log('Encoded signature (first 100 chars):', encodedSignature.substring(0, 100));
-          
+          console.log(
+            'Encoded signature (first 100 chars):',
+            encodedSignature.substring(0, 100),
+          );
+
           return encodedSignature;
         } catch (error) {
           console.error('Sign callback error:', error);
@@ -513,7 +515,9 @@ gQT51sWj0C7S5tkmVWqRbuKLPLNTa4IW+Ls30yReijz95DWMHf0X
         return forge.util.encode64(signature);
       };
 
+      console.log('connect:', HOST, PORT, 'user');
       const client = await SSHClient.connect(HOST, PORT, 'user');
+      console.log('auth:', publicKey);
       await client.authenticateWithSignCallback(publicKey, signCallback);
       setStatus('RSA 2048 SHA256 Sign Callback Connected!');
       client.disconnect();

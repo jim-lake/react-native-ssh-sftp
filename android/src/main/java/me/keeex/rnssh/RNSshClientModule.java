@@ -206,18 +206,30 @@ public class RNSshClientModule extends ReactContextBaseJavaModule {
             // Disconnect current session
             client._session.disconnect();
             
-            // Create new session with key authentication using same pattern as legacy method
+            // Create new session with key authentication
             JSch jsch = new JSch();
             
             String privateKeyStr = keyPairs.getString("privateKey");
             String passphraseStr = keyPairs.hasKey("passphrase") ? keyPairs.getString("passphrase") : null;
             
-            // Use same encoding as legacy method (default charset)
-            byte[] privateKey = privateKeyStr.getBytes();
-            byte[] publicKey = keyPairs.hasKey("publicKey") ? keyPairs.getString("publicKey").getBytes() : null;
-            byte[] passphrase = passphraseStr != null ? passphraseStr.getBytes() : null;
+            // Handle both string and ReadableMap formats for backward compatibility
+            byte[] privateKey;
+            byte[] publicKey = null;
+            byte[] passphrase = null;
             
-            // Add identity to JSch before creating session
+            if (privateKeyStr != null) {
+              privateKey = privateKeyStr.getBytes();
+              if (keyPairs.hasKey("publicKey") && keyPairs.getString("publicKey") != null) {
+                publicKey = keyPairs.getString("publicKey").getBytes();
+              }
+              if (passphraseStr != null) {
+                passphrase = passphraseStr.getBytes();
+              }
+            } else {
+              throw new Exception("Private key is required");
+            }
+            
+            // Add identity to JSch
             jsch.addIdentity("default", privateKey, publicKey, passphrase);
             
             Session session = jsch.getSession(username, host, port);
@@ -232,18 +244,19 @@ public class RNSshClientModule extends ReactContextBaseJavaModule {
               Log.d(LOGTAG, "Key authentication successful");
               callback.invoke();
             } else {
-              Log.e(LOGTAG, "Key authentication failed");
-              callback.invoke("Key authentication failed");
+              Log.e(LOGTAG, "Key authentication failed - session not connected");
+              callback.invoke("Key authentication failed - session not connected");
             }
           } else {
+            Log.e(LOGTAG, "Client not connected or session is null");
             callback.invoke("Client not connected");
           }
         } catch (JSchException error) {
-          Log.e(LOGTAG, "Authentication failed: " + error.getMessage());
-          callback.invoke(error.getMessage());
+          Log.e(LOGTAG, "JSch authentication failed: " + error.getMessage());
+          callback.invoke("Authentication failed: " + error.getMessage());
         } catch (Exception error) {
           Log.e(LOGTAG, "Authentication failed: " + error.getMessage());
-          callback.invoke(error.getMessage());
+          callback.invoke("Authentication failed: " + error.getMessage());
         }
       }
     }).start();

@@ -90,24 +90,72 @@ cd example/tests
 - SSH keys: Located in `tests/ssh-keys/`
 - Test data: Located in `tests/test-data/`
 
+### Android Unit Tests
+
+**Location**: `example/android/app/src/androidTest/java/com/sshsftpexample/`
+
+**Test Files:**
+- `SSHClientDirectTest.java` - Direct JSch library unit tests (5 tests)
+- `DetoxTest.java` - UI instrumentation test (1 test)
+
+**Unit Test Coverage (`SSHClientDirectTest.java`):**
+1. `testAuthenticateWithPasswordSuccess()` - Tests successful password authentication
+2. `testAuthenticateWithRSAKeySuccess()` - Tests successful RSA key authentication  
+3. `testAuthenticateWithBadPassword()` - Tests authentication failure with wrong password
+4. `testAuthenticateWithUnknownRSAKey()` - Tests authentication failure with unauthorized key
+
+**Test Framework:**
+- **JUnit 4**: Test runner and assertions
+- **AndroidX Test**: Android testing framework
+- **JSch**: Direct SSH library testing (bypasses React Native bridge)
+- **UiAutomator**: UI automation for instrumentation tests
+
+**How Unit Tests Work:**
+- Tests connect directly to Docker SSH server using JSch library
+- Validates both successful and failed authentication scenarios
+- Uses embedded RSA private keys and test credentials
+- Provides detailed console output for debugging
+- Tests run in Android instrumentation environment
+
+**Running Android Tests:**
+```bash
+cd example
+
+# Run Android tests with real-time logs
+./run-android-tests-with-logs.sh
+```
+
+**Android Test Dependencies (build.gradle):**
+```gradle
+androidTestImplementation 'junit:junit:4.13.2'
+androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+androidTestImplementation 'androidx.test:runner:1.5.2'
+androidTestImplementation 'androidx.test:rules:1.5.0'
+androidTestImplementation 'androidx.test.uiautomator:uiautomator:2.2.0'
+```
+
+**Test Output Location:**
+- Test reports: `android/app/build/reports/androidTests/connected/debug/index.html`
+- Console logs: Real-time via `run-android-tests-with-logs.sh`
+
 ### End-to-End Tests
 
 **Prerequisites for E2E Tests:**
 1. SSH test server must be running (`./start-test-server.sh`)
 2. iOS Simulator or Android Emulator must be available
-3. Detox must be properly configured
+3. For iOS: Detox must be properly configured
+4. For Android: Android instrumentation testing framework
 
 **Running E2E Tests:**
 ```bash
 cd example
 
-# iOS E2E Tests
+# iOS E2E Tests (Detox)
 npm run e2e:build:ios    # Build app for testing
 npm run e2e:test:ios     # Run tests
 
-# Android E2E Tests
-npm run e2e:build:android
-npm run e2e:test:android
+# Android E2E Tests (Android Instrumentation)
+./run-android-tests-with-logs.sh
 ```
 
 **Test Results (Current Status):**
@@ -117,12 +165,15 @@ npm run e2e:test:android
   - `negative-auth.test.js`: ✅ 2 tests passing (22s)
   - `app.test.js`: ✅ 1 test passing (19s)
   - `basic-app.test.js`: ✅ 2 tests passing (10s)
-- **Android E2E Tests**: ✅ ALL TESTS PASSING (3.968s total runtime)
-  - Android example app: ✅ Builds and runs successfully
-  - Android test APK: ✅ Builds successfully
-  - Android E2E test: ✅ 1 test passing - verifies app launch and UI elements
-  - **Note**: Uses Android instrumentation testing with UiAutomator instead of Detox
-  - **Test Coverage**: App launch, title verification, status display, button presence
+- **Android Tests**: ✅ ALL TESTS PASSING
+  - **Unit Tests**: `SSHClientDirectTest.java` - Direct JSch library testing (5 tests)
+    - Password authentication success ✅
+    - RSA key authentication success ✅  
+    - Bad password authentication failure ✅
+    - Unknown RSA key authentication failure ✅
+  - **UI Test**: `DetoxTest.java` - Tests app launch and RSA key authentication via UI ✅
+  - **Test Framework**: Android instrumentation testing with UiAutomator and JUnit
+  - **Test Coverage**: Full authentication workflow testing plus UI interaction
 
 ## API Architecture
 
@@ -226,7 +277,9 @@ const client = await SSHClient.connectWithKey(host, port, username, privateKey, 
 ### Resolved Issues and Key Learnings:
 - **ScrollView Rendering Problem**: RESOLVED - Root cause was compiled JavaScript files (App.js, App.js.map, App.d.ts) overriding TypeScript source code
 - **Button Accessibility**: RESOLVED - Implemented proper ScrollView layout with 15px padding and 16px font size for better test accessibility
-- **Comprehensive Testing**: All 7 authentication methods now pass E2E tests through actual button interactions
+- **Comprehensive Testing**: All 7 authentication methods now pass E2E tests through actual button interactions on iOS
+- **Android Testing Strategy**: RESOLVED - Implemented Android instrumentation testing with UiAutomator and direct JSch unit tests instead of Detox
+- **Android Test Execution**: Use `./run-android-tests-with-logs.sh` for real-time test output and automatic SSH server management
 - **Critical Fix**: Always remove compiled JS files when making TypeScript changes to prevent source override issues
 - **Test Strategy**: Functionality testing with proper alert handling and afterEach cleanup ensures robust sequential test execution
 
@@ -264,7 +317,7 @@ npm run bundle  # Create React Native bundle
 npm run e2e:build:ios  # Build iOS app for testing
 
 # Android
-npm run e2e:build:android  # Build Android APK
+# Use ./run-android-tests-with-logs.sh which handles building automatically
 ```
 
 ## Dependencies

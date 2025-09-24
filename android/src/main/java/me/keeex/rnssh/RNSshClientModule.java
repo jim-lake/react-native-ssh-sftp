@@ -287,6 +287,33 @@ public class RNSshClientModule extends ReactContextBaseJavaModule {
     }
   }
 
+  private String extractAlgorithmFromKeyBlob(byte[] keyBlob) {
+    try {
+      // SSH public key format: 4-byte length + algorithm string + key data
+      if (keyBlob.length < 4) {
+        return "ssh-rsa"; // fallback
+      }
+      
+      // Read algorithm string length (big-endian)
+      int algorithmLength = ((keyBlob[0] & 0xff) << 24) |
+                           ((keyBlob[1] & 0xff) << 16) |
+                           ((keyBlob[2] & 0xff) << 8) |
+                           (keyBlob[3] & 0xff);
+      
+      if (algorithmLength <= 0 || algorithmLength > keyBlob.length - 4) {
+        return "ssh-rsa"; // fallback
+      }
+      
+      // Extract and return algorithm string as-is
+      String algorithm = new String(keyBlob, 4, algorithmLength);
+      Log.d(LOGTAG, "Extracted algorithm from keyBlob: " + algorithm);
+      return algorithm;
+    } catch (Exception e) {
+      Log.e(LOGTAG, "Error extracting algorithm from keyBlob: " + e.getMessage());
+      return "ssh-rsa"; // fallback
+    }
+  }
+
   @ReactMethod
   public void authenticateWithSignCallback(final String publicKey, final String key, final Callback callback) {
     final byte[] keyBlob = Base64.decode(publicKey, Base64.DEFAULT);
@@ -385,8 +412,8 @@ public class RNSshClientModule extends ReactContextBaseJavaModule {
                     }
                     Log.d(LOGTAG, "Raw signature hex: " + rawSigHex.toString());
                     
-                    // Convert raw signature to SSH wire format
-                    String algorithm = "rsa-sha2-256";
+                    // Extract algorithm from keyBlob
+                    String algorithm = extractAlgorithmFromKeyBlob(keyBlob);
                     byte[] algorithmBytes = algorithm.getBytes();
                     
                     byte[] sshSignature = new byte[4 + algorithmBytes.length + 4 + rawSignature.length];

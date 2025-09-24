@@ -6,9 +6,8 @@
   "types": "dist/sshclient.d.ts",
   "scripts": {
     "_postinstall": "npm run compile",
-    "build": "npm run compile",
+    "build": "tsc",
     "precompile": "npm run lint:build",
-    "compile": "tsc",
     "lint": "eslint src",
     "lint:build": "cross-env NODE_ENV=production npm run lint -- --max-warnings 20",
     "pretty": "prettier --write src/*"

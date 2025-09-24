@@ -64,6 +64,24 @@ public class DetoxTest {
         UiObject successText = waitForElement(new UiSelector().textContains("RSA 2048 SHA256 Sign Callback Connected!"), 30000, "RSA 2048 SHA 256 Sign authentication should succeed");
         System.out.println("SUCCESS: RSA 2048 SHA256 Sign authentication worked!");
     }
+
+    @Test
+    public void testP256Sign() throws Exception {
+        Intent intent = new Intent();
+        mActivityRule.launchActivity(intent);
+        
+        // Wait for app to launch with polling
+        waitForElement(new UiSelector().text("SSH SFTP Example"), 10000, "App title should appear");
+        
+        // Find and click ECDSA P-256 Sign button
+        UiObject signButton = waitForElement(new UiSelector().text("ECDSA P-256 Sign"), 5000, "ECDSA P-256 Sign button should exist");
+        signButton.click();
+        System.out.println("ECDSA P-256 Sign button clicked, waiting for authentication...");
+        
+        // Wait for authentication result with polling
+        UiObject successText = waitForElement(new UiSelector().textContains("ECDSA P-256 Sign Callback Connected!"), 30000, "ECDSA P-256 Sign authentication should succeed");
+        System.out.println("SUCCESS: ECDSA P-256 Sign authentication worked!");
+    }
     
     private UiObject waitForElement(UiSelector selector, long timeoutMs, String errorMessage) throws Exception {
         long startTime = System.currentTimeMillis();

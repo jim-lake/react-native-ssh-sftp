@@ -476,7 +476,20 @@ public class RNSshClientModule extends ReactContextBaseJavaModule {
               @Override
               public String getAlgName() {
                 Log.d(LOGTAG, "=== getAlgName() called ===");
-                return "ssh-rsa";
+                String algorithm = extractAlgorithmFromKeyBlob(keyBlob);
+                
+                // Map SSH wire format algorithms to JSch-compatible names
+                String jschAlgorithm;
+                if (algorithm.startsWith("ecdsa-")) {
+                  jschAlgorithm = algorithm; // ECDSA algorithms are used as-is
+                } else if (algorithm.startsWith("rsa-sha2-")) {
+                  jschAlgorithm = "ssh-rsa"; // RSA variants use ssh-rsa for JSch
+                } else {
+                  jschAlgorithm = algorithm; // Default to extracted algorithm
+                }
+                
+                Log.d(LOGTAG, "getAlgName returning: " + jschAlgorithm + " (extracted: " + algorithm + ")");
+                return jschAlgorithm;
               }
               
               @Override
